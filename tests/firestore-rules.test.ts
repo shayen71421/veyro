@@ -53,6 +53,19 @@ async function joinLeaderboard(uid: string, id = leaderboardId) {
   return batch.commit();
 }
 
+async function firstTimeJoinTransaction(uid: string, id = leaderboardId) {
+  await seedUser(uid);
+  const db = environment.authenticatedContext(uid).firestore();
+  return runTransaction(db, async (transaction) => {
+    const userRef = doc(db, "users", uid);
+    const userSnapshot = await transaction.get(userRef);
+    if (!userSnapshot.exists()) throw new Error("PROFILE_NOT_FOUND");
+    transaction.update(userRef, { leaderboardId: id, lastSeenAt: serverTimestamp() });
+    transaction.set(doc(db, "leaderboardOwners", id), { ownerUid: uid, createdAt: serverTimestamp() });
+    transaction.set(doc(db, "leaderboardEntries", id), leaderboardEntry());
+  });
+}
+
 const publicFind = (status = "published") => ({
   schemaVersion:1, status, title:"Riverfront Walk", description:"A real public place with a sufficiently detailed plain-text description.",
   stationId:"aluva", stationName:"Aluva", category:"park", walkingMinutes:10, walkingTimeType:"estimated",
@@ -98,6 +111,12 @@ describe("Veyro Firestore rules", () => {
   it("allows a valid atomic claim, payload, and journey creation", async () => { await assertSucceeds(atomicCreate("alice")); const db = environment.authenticatedContext("alice").firestore(); await expect(assertSucceeds(getDoc(doc(db, "journeys", "journey-1")))).resolves.toBeDefined(); await assertSucceeds(getDocs(query(collection(db, "journeys"), where("ownerUid", "==", "alice")))); });
   it("allows an atomic private ownership mapping and safe public entry", async () => {
     await assertSucceeds(joinLeaderboard("alice"));
+    const db = environment.authenticatedContext("alice").firestore();
+    await assertSucceeds(getDoc(doc(db, "leaderboardOwners", leaderboardId)));
+    await assertSucceeds(getDoc(doc(db, "leaderboardEntries", leaderboardId)));
+  });
+  it("allows a new user to join without reading nonexistent leaderboard documents", async () => {
+    await assertSucceeds(firstTimeJoinTransaction("alice"));
     const db = environment.authenticatedContext("alice").firestore();
     await assertSucceeds(getDoc(doc(db, "leaderboardOwners", leaderboardId)));
     await assertSucceeds(getDoc(doc(db, "leaderboardEntries", leaderboardId)));

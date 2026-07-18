@@ -43,12 +43,20 @@ export async function joinLeaderboard(input: {
     const userSnapshot = await transaction.get(userRef);
     if (!userSnapshot.exists()) throw new Error("PROFILE_NOT_FOUND");
     const existingId = userSnapshot.data().leaderboardId;
-    const id = typeof existingId === "string" && existingId ? existingId : candidateId;
+    if (typeof existingId !== "string" || !existingId) {
+      const ownerRef = doc(client.db, "leaderboardOwners", candidateId);
+      const entryRef = doc(client.db, "leaderboardEntries", candidateId);
+      transaction.update(userRef, { leaderboardId: candidateId, lastSeenAt: serverTimestamp() });
+      transaction.set(ownerRef, { ownerUid: input.uid, createdAt: serverTimestamp() });
+      transaction.set(entryRef, { ...data, joinedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      return candidateId;
+    }
+
+    const id = existingId;
     const ownerRef = doc(client.db, "leaderboardOwners", id);
     const entryRef = doc(client.db, "leaderboardEntries", id);
     const [ownerSnapshot, entrySnapshot] = await Promise.all([transaction.get(ownerRef), transaction.get(entryRef)]);
     if (ownerSnapshot.exists() && ownerSnapshot.data().ownerUid !== input.uid) throw new Error("OWNERSHIP_MISMATCH");
-    if (!existingId) transaction.update(userRef, { leaderboardId: id, lastSeenAt: serverTimestamp() });
     if (!ownerSnapshot.exists()) transaction.set(ownerRef, { ownerUid: input.uid, createdAt: serverTimestamp() });
     if (entrySnapshot.exists()) {
       transaction.update(entryRef, { ...data, showPhoto: entrySnapshot.data().showPhoto === true, photoURL: entrySnapshot.data().showPhoto === true ? input.photoURL : null, joinedAt: entrySnapshot.data().joinedAt, updatedAt: serverTimestamp() });
