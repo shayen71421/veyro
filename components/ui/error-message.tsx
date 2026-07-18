@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useRef } from "react"; import gsap from "gsap"; import { AlertCircle } from "lucide-react";
+export function ErrorMessage({ message }: { message: string }) { const ref = useRef<HTMLDivElement>(null); useEffect(() => { if (!ref.current || matchMedia("(prefers-reduced-motion: reduce)").matches) return; const context = gsap.context(() => { gsap.fromTo(ref.current, { x: -7 }, { x: 0, duration: .35, ease: "elastic.out(1,.35)" }); }, ref); return () => context.revert(); }, [message]); return <div ref={ref} role="alert" className="error"><AlertCircle size={18} />{message}</div>; }

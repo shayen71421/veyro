@@ -1,0 +1,44 @@
+{
+  "name": "veyro",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "npx serve out",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\""
+  },
+  "dependencies": {
+    "@zxing/browser": "latest",
+    "@zxing/library": "latest",
+    "date-fns": "latest",
+    "firebase": "latest",
+    "gsap": "latest",
+    "html-to-image": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tesseract.js": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@testing-library/react": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "firebase-admin": "^14.2.0",
+    "firebase-tools": "latest",
+    "jsdom": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

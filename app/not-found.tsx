@@ -1,0 +1,1 @@
+import Link from "next/link"; import { BrandMark } from "@/components/ui/brand-mark"; export default function NotFound() { return <main className="screen center px-6"><BrandMark size={72} label="Veyro"/><h1 className="mt-5 text-2xl font-bold">This stop is not on the line</h1><Link className="primary-button mt-6" href="/">Return to Veyro</Link></main>; }

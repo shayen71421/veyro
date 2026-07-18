@@ -1,0 +1,2 @@
+"use client"; import { TriangleAlert } from "lucide-react"; import { BrandMark } from "@/components/ui/brand-mark";
+export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) { return <main className="screen center px-6"><BrandMark size={62} label="Veyro"/><TriangleAlert className="text-accent mt-4" size={36}/><h1 className="mt-5 text-2xl font-bold">Veyro hit a snag</h1><p className="muted mt-2">Nothing sensitive was saved. Please try again.</p><button className="primary-button mt-6" onClick={reset}>Try again</button></main>; }

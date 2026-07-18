@@ -1,0 +1,4 @@
+import type { Metadata, Viewport } from "next"; import "./globals.css"; import { Providers } from "@/components/providers";
+export const metadata: Metadata = { title: { default: "Veyro", template: "%s · Veyro" }, description: "Every ride leaves a mark.", manifest: "/manifest.webmanifest", appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Veyro" }, icons: { icon: [{ url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" }, { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }], apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }] } };
+export const viewport: Viewport = { themeColor: "#0d0d0c", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="en"><body><Providers>{children}</Providers></body></html>; }
