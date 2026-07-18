@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractKnownStationRoute, extractMobileTicketRoute, extractPaperTicketRoute } from "@/lib/ocr/ticket-ocr";
+import {
+  extractKnownStationRoute,
+  extractMobileTicketRoute,
+  extractPaperTicketRoute,
+  extractSplitMobileTicketRoute,
+} from "@/lib/ocr/ticket-ocr";
 
 describe("ticket route extraction", () => {
   it("extracts labelled paper ticket fields", () => {
@@ -16,6 +21,12 @@ describe("ticket route extraction", () => {
   it("recovers mobile routes split across lines by a graphical arrow", () => {
     expect(extractKnownStationRoute("KOCHI METRO\nAluva\n\nSN Junction\nSingle Journey")).toEqual({
       from: "Aluva", to: "SN Junction",
+    });
+  });
+
+  it("combines station labels OCR reads from separate mobile-ticket regions", () => {
+    expect(extractSplitMobileTicketRoute(" Aluva \n", "\n Vyttila ")).toEqual({
+      from: "Aluva", to: "Vyttila",
     });
   });
 });

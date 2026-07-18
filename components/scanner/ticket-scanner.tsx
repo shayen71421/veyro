@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { BrowserQRCodeReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { Camera, ImagePlus, RefreshCcw, ShieldCheck, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { preprocessTicketImage, readTicketRoute } from "@/lib/ocr/ticket-ocr";
@@ -14,6 +15,7 @@ import { useGsapEntrance } from "@/hooks/use-gsap-entrance";
 type DetectedBarcode = { rawValue: string; format?: string };
 type NativeBarcodeDetector = { detect: (source: CanvasImageSource) => Promise<DetectedBarcode[]> };
 type NativeBarcodeDetectorConstructor = new (options: { formats: string[] }) => NativeBarcodeDetector;
+type QrCrop = { x: number; y: number; width: number; height: number };
 
 function scannerLog(stage: string, details: Record<string, string | number | boolean> = {}) {
   if (process.env.NODE_ENV !== "production") console.info("[Veyro scanner]", { stage, ...details });
@@ -30,6 +32,66 @@ function drawScaledImage(source: CanvasImageSource, sourceWidth: number, sourceH
   context.imageSmoothingQuality = "high";
   context.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+function createThresholdCanvas(source: HTMLCanvasElement, crop: QrCrop, threshold = 160) {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(crop.width));
+  canvas.height = Math.max(1, Math.round(crop.height));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("CAPTURE_FAILED");
+
+  context.drawImage(
+    source,
+    Math.round(crop.x),
+    Math.round(crop.y),
+    Math.round(crop.width),
+    Math.round(crop.height),
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < image.data.length; index += 4) {
+    const luminance = (
+      image.data[index] * 0.299
+      + image.data[index + 1] * 0.587
+      + image.data[index + 2] * 0.114
+    );
+    const value = luminance >= threshold ? 255 : 0;
+    image.data[index] = value;
+    image.data[index + 1] = value;
+    image.data[index + 2] = value;
+    image.data[index + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function getQrFallbackCanvases(source: HTMLCanvasElement) {
+  const fullCrop = { x: 0, y: 0, width: source.width, height: source.height };
+  const squareSize = Math.round(Math.min(source.width, source.height) * 0.8);
+  const horizontalSpace = Math.max(0, source.width - squareSize);
+  const verticalSpace = Math.max(0, source.height - squareSize);
+  const squareCrops = source.height >= source.width
+    ? [
+        { x: horizontalSpace / 2, y: verticalSpace / 2, width: squareSize, height: squareSize },
+        { x: horizontalSpace / 2, y: 0, width: squareSize, height: squareSize },
+        { x: horizontalSpace / 2, y: verticalSpace, width: squareSize, height: squareSize },
+      ]
+    : [
+        { x: horizontalSpace / 2, y: verticalSpace / 2, width: squareSize, height: squareSize },
+        { x: 0, y: verticalSpace / 2, width: squareSize, height: squareSize },
+        { x: horizontalSpace, y: verticalSpace / 2, width: squareSize, height: squareSize },
+      ];
+
+  return [
+    source,
+    createThresholdCanvas(source, fullCrop),
+    ...squareCrops.map((crop) => createThresholdCanvas(source, crop)),
+  ];
 }
 
 async function detectQrValue(source: HTMLCanvasElement): Promise<string> {
@@ -59,12 +121,34 @@ async function detectQrValue(source: HTMLCanvasElement): Promise<string> {
 
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const fallback = drawScaledImage(working, working.width, working.height, 1200);
+    const hints = new Map<DecodeHintType, BarcodeFormat[] | boolean>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    const reader = new BrowserQRCodeReader(hints);
+    const candidates = getQrFallbackCanvases(fallback);
     try {
-      scannerLog("qr-zxing-start", { width: fallback.width, height: fallback.height });
-      const value = new BrowserQRCodeReader().decodeFromCanvas(fallback).getText();
-      scannerLog("qr-zxing-success");
-      return value;
+      scannerLog("qr-zxing-start", {
+        width: fallback.width,
+        height: fallback.height,
+        attempts: candidates.length,
+      });
+      for (let index = 0; index < candidates.length; index += 1) {
+        try {
+          const value = reader.decodeFromCanvas(candidates[index]).getText();
+          scannerLog("qr-zxing-success", { attempt: index + 1 });
+          return value;
+        } catch {
+          // Try the next privacy-safe in-memory contrast/crop variant.
+        }
+      }
+      throw new Error("QR_NOT_FOUND");
     } finally {
+      for (const candidate of candidates) {
+        if (candidate !== fallback) {
+          candidate.width = 1;
+          candidate.height = 1;
+        }
+      }
       fallback.width = 1;
       fallback.height = 1;
     }

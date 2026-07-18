@@ -41,6 +41,12 @@ export function extractMobileTicketRoute(text: string): { from: string; to: stri
   return null;
 }
 
+export function extractSplitMobileTicketRoute(fromText: string, toText: string): { from: string; to: string } | null {
+  const from = tidy(fromText);
+  const to = tidy(toText);
+  return from.length > 1 && to.length > 1 ? { from, to } : null;
+}
+
 /**
  * Mobile tickets often use a graphical arrow. Tesseract can then return the
  * two station labels on separate lines, so recover their visual text order
@@ -78,6 +84,8 @@ export async function readTicketRoute(canvas: HTMLCanvasElement, onStatus?: (sta
   const worker = await createWorker("eng", OEM.LSTM_ONLY, { logger: (message) => {
     if (message.status !== lastStatus) { lastStatus = message.status; onStatus?.(message.status); }
   } });
+  const mobileFromRegion = cropRegion(canvas, .05, .20, .39, .085);
+  const mobileToRegion = cropRegion(canvas, .55, .20, .39, .085);
   const regions = [
     cropRegion(canvas, 0, 0, 1, .48),
     cropRegion(canvas, 0, .08, 1, .66),
@@ -85,6 +93,18 @@ export async function readTicketRoute(canvas: HTMLCanvasElement, onStatus?: (sta
     canvas,
   ];
   try {
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE, preserve_interword_spaces: "1", user_defined_dpi: "300" });
+    const fromResult = await worker.recognize(mobileFromRegion);
+    const toResult = await worker.recognize(mobileToRegion);
+    const splitRoute = extractSplitMobileTicketRoute(fromResult.data.text, toResult.data.text);
+    if (splitRoute) {
+      const rawConfidence = Math.max(0, Math.min(1, Math.min(fromResult.data.confidence, toResult.data.confidence) / 100));
+      const stationConfidence = Math.min(matchStationName(splitRoute.from)?.score ?? 0, matchStationName(splitRoute.to)?.score ?? 0);
+      const confidence = rawConfidence * .65 + stationConfidence * .35;
+      const validated = validateDetectedRoute(splitRoute.from, splitRoute.to, confidence, OCR_CONFIDENCE_THRESHOLD);
+      if (validated) return validated;
+    }
+
     await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, preserve_interword_spaces: "1", user_defined_dpi: "300" });
     for (const region of regions) {
       const result = await worker.recognize(region);
@@ -97,5 +117,12 @@ export async function readTicketRoute(canvas: HTMLCanvasElement, onStatus?: (sta
       if (validated) return validated;
     }
     return null;
-  } finally { for (const region of regions.filter((region) => region !== canvas)) { region.width = 1; region.height = 1; } await worker.terminate(); }
+  } finally {
+    mobileFromRegion.width = 1;
+    mobileFromRegion.height = 1;
+    mobileToRegion.width = 1;
+    mobileToRegion.height = 1;
+    for (const region of regions.filter((region) => region !== canvas)) { region.width = 1; region.height = 1; }
+    await worker.terminate();
+  }
 }
