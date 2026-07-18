@@ -15,6 +15,7 @@ import type { Journey } from "@/types";
 import { useGsapEntrance } from "@/hooks/use-gsap-entrance";
 import { calculateJourneyInsights } from "@/lib/insights/journey-insights";
 import { HomeLeaderboardCard } from "@/components/leaderboard/home-leaderboard-card";
+import { HomeExploreCard } from "@/components/explore/HomeExploreCard";
 
 export default function HomePage() {
   const { user, demo, displayName, photoURL } = useAuth();
@@ -40,6 +41,7 @@ export default function HomePage() {
       </div>
       <Link href="/passport/" className="secondary-button">View Passport <ArrowRight size={17}/></Link>
     </section>}
+    {!loading && <HomeExploreCard journeys={journeys}/>}
     <HomeLeaderboardCard/>
     <section className="section-block"><div className="section-title" data-animate><h2>Recent journeys</h2><Link href="/journeys/">View all</Link></div>
       {loading ? <div className="stack"><LoadingSkeleton className="h-28"/><LoadingSkeleton className="h-28"/></div> : journeys.length ? <div className="stack">{journeys.slice(0,3).map((journey) => <JourneyCard key={journey.id} journey={journey}/>)}</div> : <p className="muted">Your first journey is one scan away.</p>}

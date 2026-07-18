@@ -11,7 +11,12 @@
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
     "seed:leaderboard": "node scripts/seed-leaderboard.mjs",
-    "feature:leaderboard-user": "node scripts/feature-leaderboard-user.mjs"
+    "feature:leaderboard-user": "node scripts/feature-leaderboard-user.mjs",
+    "admin:grant": "node scripts/grant-admin.mjs",
+    "admin:revoke": "node scripts/revoke-admin.mjs",
+    "explore:seed:validate": "node --experimental-strip-types scripts/validate-explore-seed.mjs",
+    "explore:seed:dry": "node --experimental-strip-types scripts/seed-explore.mjs",
+    "explore:seed:apply": "node --experimental-strip-types scripts/seed-explore.mjs --apply"
   },
   "dependencies": {
     "@zxing/browser": "latest",

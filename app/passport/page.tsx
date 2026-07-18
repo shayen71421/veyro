@@ -13,6 +13,7 @@ import { MetroNetworkProgress } from "@/components/passport/metro-network-progre
 import { PassportStampGrid } from "@/components/passport/passport-stamp-grid";
 import { PassportShareCard } from "@/components/passport/passport-share-card";
 import { LeaderboardRanksCard } from "@/components/leaderboard/leaderboard-ranks-card";
+import { ExploreProfileSummary } from "@/components/explore/ExploreProfileSummary";
 import { useAuth } from "@/features/auth/auth-context";
 import { demoJourneys } from "@/features/journeys/demo-data";
 import { getAllJourneys } from "@/features/journeys/journey-service";
@@ -137,6 +138,7 @@ export default function PassportPage() {
     </section>
 
     {user && <LeaderboardRanksCard uid={user.uid}/>}
+    {user && <ExploreProfileSummary uid={user.uid} journeys={journeys} compact/>}
 
     <MonthlyActivityChart months={insights.monthlyActivity}/>
 

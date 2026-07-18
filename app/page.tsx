@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Home, ScanLine, ShieldCheck, Trophy } from "lucide-react";
+import { ArrowRight, Compass, Home, ScanLine, ShieldCheck, Trophy } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 import { BrandMark } from "@/components/ui/brand-mark";
+import { SiteDisclaimer } from "@/components/ui/site-disclaimer";
 import { useAuth } from "@/features/auth/auth-context";
 
 export default function LandingPage() {
@@ -61,6 +62,7 @@ export default function LandingPage() {
         <div data-hero className="hero-actions">
           {loading ? <span className="primary-button landing-loading-action">Checking your journey…</span> : signedIn ? <>
             <Link href="/home/" className="primary-button">Open Dashboard <ArrowRight size={18}/></Link>
+            <Link href="/explore/" className="secondary-button"><Compass size={18}/>Explore Kochi</Link>
           </> : <>
             <Link href="/register/" className="primary-button">Continue with Google <ArrowRight size={18}/></Link>
             <Link href="/login/" className="secondary-button">Sign in</Link>
@@ -77,9 +79,10 @@ export default function LandingPage() {
           {signedIn ? <><Home/>Your journal is ready</> : <><ScanLine/>One scan, one story</>}
         </div>
         <div className="floating-card two">
-          <><ShieldCheck/>Processed privately</>
+          {signedIn ? <><Compass/>Discover Veyro Finds</> : <><ShieldCheck/>Processed privately</>}
         </div>
       </div>
     </section>
+    <SiteDisclaimer className="landing-disclaimer"/>
   </main>;
 }

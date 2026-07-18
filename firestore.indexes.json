@@ -1,131 +1,80 @@
 {
   "indexes": [
-    {
-      "collectionGroup": "journeys",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "ownerUid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "scannedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "totalDistanceKm",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "totalJourneys",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "joinedAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "totalJourneys",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "totalDistanceKm",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "joinedAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "longestStreak",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "totalJourneys",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "totalDistanceKm",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "joinedAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "totalDistanceKm",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "totalJourneys",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboardEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "visible",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "longestStreak",
-          "order": "ASCENDING"
-        }
-      ]
-    }
+    { "collectionGroup": "journeys", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerUid", "order": "ASCENDING" },
+      { "fieldPath": "scannedAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "totalDistanceKm", "order": "DESCENDING" },
+      { "fieldPath": "totalJourneys", "order": "DESCENDING" },
+      { "fieldPath": "joinedAt", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "totalJourneys", "order": "DESCENDING" },
+      { "fieldPath": "totalDistanceKm", "order": "DESCENDING" },
+      { "fieldPath": "joinedAt", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "longestStreak", "order": "DESCENDING" },
+      { "fieldPath": "totalJourneys", "order": "DESCENDING" },
+      { "fieldPath": "totalDistanceKm", "order": "DESCENDING" },
+      { "fieldPath": "joinedAt", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "totalDistanceKm", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "totalJourneys", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "leaderboardEntries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "visible", "order": "ASCENDING" },
+      { "fieldPath": "longestStreak", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "stationId", "order": "ASCENDING" },
+      { "fieldPath": "loveCount", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "stationId", "order": "ASCENDING" },
+      { "fieldPath": "publishedAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "category", "order": "ASCENDING" },
+      { "fieldPath": "loveCount", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "authorType", "order": "ASCENDING" },
+      { "fieldPath": "publishedAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "loveCount", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "publishedAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "walkingMinutes", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "environment", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "exploreFinds", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "costType", "order": "ASCENDING" }
+    ] }
   ],
   "fieldOverrides": []
 }

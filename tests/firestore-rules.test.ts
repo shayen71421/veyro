@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch, Timestamp } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch, Timestamp } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 
 let environment: RulesTestEnvironment;
@@ -50,6 +50,38 @@ async function joinLeaderboard(uid: string, id = leaderboardId) {
   batch.update(doc(db, "users", uid), { leaderboardId: id, lastSeenAt: serverTimestamp() });
   batch.set(doc(db, "leaderboardOwners", id), { ownerUid: uid, createdAt: serverTimestamp() });
   batch.set(doc(db, "leaderboardEntries", id), leaderboardEntry());
+  return batch.commit();
+}
+
+const publicFind = (status = "published") => ({
+  schemaVersion:1, status, title:"Riverfront Walk", description:"A real public place with a sufficiently detailed plain-text description.",
+  stationId:"aluva", stationName:"Aluva", category:"park", walkingMinutes:10, walkingTimeType:"estimated",
+  costType:"free", bestTimes:["morning"], environment:"outdoor", latitude:10.11, longitude:76.35,
+  accessibilityNote:null, authorType:"local_explorer", authorDisplayName:"Alice Rider", authorBadge:"Local Explorer",
+  loveCount:0, seedVersion:null, verifiedAt:null, createdAt:serverTimestamp(), updatedAt:serverTimestamp(),
+  publishedAt:status === "published" ? serverTimestamp() : null,
+});
+
+async function seedPublishedFind(id = "riverfront") {
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "exploreFinds", id), {
+    ...publicFind(), createdAt:Timestamp.now(), updatedAt:Timestamp.now(), publishedAt:Timestamp.now(),
+  }));
+}
+
+async function seedEligibility(uid: string, eligible: boolean) {
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "exploreEligibility", uid), {
+    totalJourneys:eligible ? 5 : 2, totalDistanceKm:eligible ? 25 : 8, eligible, statsVersion:1, calculatedAt:Timestamp.now(),
+  }));
+}
+
+async function submitFind(uid: string, id = "community-find") {
+  const db = environment.authenticatedContext(uid).firestore(); const batch = writeBatch(db);
+  batch.set(doc(db, "exploreFinds", id), publicFind("pending"));
+  batch.set(doc(db, "exploreFindOwners", id), { ownerUid:uid, origin:"community", createdAt:serverTimestamp() });
+  batch.set(doc(db, "users", uid, "exploreSubmissions", id), {
+    findId:id, title:"Riverfront Walk", stationId:"aluva", stationName:"Aluva", status:"pending",
+    moderationMessage:null, createdAt:serverTimestamp(), updatedAt:serverTimestamp(),
+  });
   return batch.commit();
 }
 
@@ -103,4 +135,70 @@ describe("Veyro Firestore rules", () => {
     await assertFails(updateDoc(entry, { email: "leak@example.test", updatedAt: serverTimestamp() }));
   });
 
+  it("rejects unauthenticated Explore reads and allows signed-in published reads", async () => {
+    await seedPublishedFind();
+    await assertFails(getDoc(doc(environment.unauthenticatedContext().firestore(), "exploreFinds", "riverfront")));
+    const db = environment.authenticatedContext("alice").firestore();
+    await assertSucceeds(getDoc(doc(db, "exploreFinds", "riverfront")));
+    await assertSucceeds(getDocs(query(collection(db, "exploreFinds"), where("status", "==", "published"))));
+  });
+  it("excludes pending Finds from normal readers", async () => {
+    await environment.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "exploreFinds", "pending"), {
+      ...publicFind("pending"), createdAt:Timestamp.now(), updatedAt:Timestamp.now(),
+    }));
+    await assertFails(getDoc(doc(environment.authenticatedContext("bob").firestore(), "exploreFinds", "pending")));
+  });
+  it("requires eligible atomic pending submissions", async () => {
+    await seedEligibility("alice", false);
+    await assertFails(submitFind("alice", "not-eligible"));
+    await seedEligibility("alice", true);
+    await assertSucceeds(submitFind("alice"));
+  });
+  it("prevents normal publishing and editing another owner's Find", async () => {
+    await seedEligibility("alice", true); await assertSucceeds(submitFind("alice"));
+    await assertFails(updateDoc(doc(environment.authenticatedContext("alice").firestore(), "exploreFinds", "community-find"), { status:"published", publishedAt:serverTimestamp(), updatedAt:serverTimestamp() }));
+    await assertFails(updateDoc(doc(environment.authenticatedContext("bob").firestore(), "exploreFinds", "community-find"), { title:"Taken over", updatedAt:serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(environment.authenticatedContext("alice").firestore(), "exploreFinds", "community-find"), { title:"Updated Riverfront Walk", updatedAt:serverTimestamp() }));
+  });
+  it("returns an owner-edited published Find to pending", async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "exploreFinds", "owned-published"), { ...publicFind(), createdAt:Timestamp.now(), updatedAt:Timestamp.now(), publishedAt:Timestamp.now() });
+      await setDoc(doc(context.firestore(), "exploreFindOwners", "owned-published"), { ownerUid:"alice", origin:"community", createdAt:Timestamp.now() });
+    });
+    await assertSucceeds(updateDoc(doc(environment.authenticatedContext("alice").firestore(), "exploreFinds", "owned-published"), { status:"pending", title:"Revised Riverfront Walk", updatedAt:serverTimestamp() }));
+  });
+  it("allows an enabled admin to approve and rejects non-admin admin-data access", async () => {
+    await seedEligibility("alice", true); await assertSucceeds(submitFind("alice"));
+    await environment.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "admins", "admin"), { role:"admin", enabled:true, createdAt:Timestamp.now(), updatedAt:null }));
+    const adminDb = environment.authenticatedContext("admin").firestore();
+    await assertSucceeds(updateDoc(doc(adminDb, "exploreFinds", "community-find"), { status:"published", publishedAt:serverTimestamp(), updatedAt:serverTimestamp() }));
+    await assertFails(getDocs(collection(environment.authenticatedContext("alice").firestore(), "admins")));
+    await assertFails(getDoc(doc(environment.authenticatedContext("alice").firestore(), "exploreSourceRecords", "community-find")));
+  });
+  it("keeps reports private and prevents public listing", async () => {
+    await seedPublishedFind();
+    const aliceDb = environment.authenticatedContext("alice").firestore();
+    await assertSucceeds(setDoc(doc(aliceDb, "exploreReports", "riverfront__alice"), {
+      findId:"riverfront", reporterUid:"alice", reason:"incorrect_location", details:null,
+      status:"open", createdAt:serverTimestamp(), reviewedAt:null,
+    }));
+    await assertFails(getDocs(collection(aliceDb, "exploreReports")));
+  });
+  it("allows only own interactions and couples loved reactions to loveCount", async () => {
+    await seedPublishedFind();
+    const aliceDb = environment.authenticatedContext("alice").firestore();
+    const interactionRef = doc(aliceDb, "users", "alice", "exploreInteractions", "riverfront");
+    await assertSucceeds(setDoc(interactionRef, {
+      findId:"riverfront", saved:false, visited:true, hidden:false, reaction:null,
+      firstSeenAt:serverTimestamp(), savedAt:null, visitedAt:serverTimestamp(), reactionAt:null, hiddenAt:null, updatedAt:serverTimestamp(),
+    }));
+    await assertFails(getDoc(doc(environment.authenticatedContext("bob").firestore(), "users", "alice", "exploreInteractions", "riverfront")));
+    await assertSucceeds(runTransaction(aliceDb, async (transaction) => {
+      const findRef = doc(aliceDb, "exploreFinds", "riverfront");
+      await transaction.get(interactionRef); const find = await transaction.get(findRef);
+      transaction.update(interactionRef, { reaction:"loved", reactionAt:serverTimestamp(), updatedAt:serverTimestamp() });
+      transaction.update(findRef, { loveCount:Number(find.data()?.loveCount ?? 0) + 1, updatedAt:serverTimestamp() });
+    }));
+    await assertFails(updateDoc(doc(aliceDb, "exploreFinds", "riverfront"), { loveCount:99, updatedAt:serverTimestamp() }));
+  });
 });

@@ -9,6 +9,54 @@ service cloud.firestore {
     function payloadPath(key) { return /databases/$(database)/documents/privateTicketPayloads/$(key); }
     function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
     function leaderboardOwnerPath(id) { return /databases/$(database)/documents/leaderboardOwners/$(id); }
+    function adminPath(uid) { return /databases/$(database)/documents/admins/$(uid); }
+    function exploreFindPath(id) { return /databases/$(database)/documents/exploreFinds/$(id); }
+    function exploreOwnerPath(id) { return /databases/$(database)/documents/exploreFindOwners/$(id); }
+    function exploreEligibilityPath(uid) { return /databases/$(database)/documents/exploreEligibility/$(uid); }
+    function exploreSubmissionPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/exploreSubmissions/$(id); }
+    function exploreInteractionPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/exploreInteractions/$(id); }
+    function enabledAdmin() {
+      return signedIn() && exists(adminPath(request.auth.uid))
+        && get(adminPath(request.auth.uid)).data.role == 'admin'
+        && get(adminPath(request.auth.uid)).data.enabled == true;
+    }
+    function ownsExploreFind(id) {
+      return signedIn() && exists(exploreOwnerPath(id))
+        && get(exploreOwnerPath(id)).data.ownerUid == request.auth.uid;
+    }
+    function validStationId(id) {
+      return id in ['aluva','pulinchodu','companypady','ambattukavu','muttom','kalamassery','cochin-university','pathadipalam','edapally','changampuzha-park','palarivattom','jln-stadium','kaloor','town-hall','mg-road','maharajas-college','ernakulam-south','kadavanthra','elamkulam','vyttila','thykoodam','petta','vadakkekotta','sn-junction','tripunithura-terminal'];
+    }
+    function validExploreFind(data) {
+      return exact(data, ['schemaVersion','status','title','description','stationId','stationName','category','walkingMinutes','walkingTimeType','costType','bestTimes','environment','latitude','longitude','accessibilityNote','authorType','authorDisplayName','authorBadge','loveCount','seedVersion','verifiedAt','createdAt','updatedAt','publishedAt'])
+        && data.schemaVersion == 1
+        && data.status in ['pending','published','hidden','rejected','removed']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 70
+        && data.description is string && data.description.size() >= 30 && data.description.size() <= 500
+        && validStationId(data.stationId) && data.stationName is string && data.stationName.size() >= 2 && data.stationName.size() <= 70
+        && data.category in ['food','park','culture','shopping','quick_activity','quiet_spot','photo_spot','museum','recreation','student_friendly','useful_service']
+        && data.walkingMinutes is int && data.walkingMinutes >= 1 && data.walkingMinutes <= 25
+        && data.walkingTimeType in ['verified','estimated']
+        && data.costType in ['free','paid','varies','unknown']
+        && data.bestTimes is list && data.bestTimes.size() <= 6
+        && data.bestTimes.hasOnly(['morning','afternoon','evening','night','weekday','weekend'])
+        && data.environment in ['indoor','outdoor','mixed','unknown']
+        && data.latitude is number && data.latitude >= 9.85 && data.latitude <= 10.2
+        && data.longitude is number && data.longitude >= 76.2 && data.longitude <= 76.45
+        && (data.accessibilityNote == null || (data.accessibilityNote is string && data.accessibilityNote.size() <= 200))
+        && data.authorType in ['veyro_team','local_explorer']
+        && data.authorDisplayName is string && data.authorDisplayName.size() >= 1 && data.authorDisplayName.size() <= 30
+        && data.authorBadge in ['Veyro Curated','Local Explorer']
+        && data.loveCount is int && data.loveCount >= 0 && data.loveCount <= 10000000
+        && (data.seedVersion == null || (data.seedVersion is int && data.seedVersion >= 1));
+    }
+    function validInteraction(data, id) {
+      return exact(data, ['findId','saved','visited','hidden','reaction','firstSeenAt','savedAt','visitedAt','reactionAt','hiddenAt','updatedAt'])
+        && data.findId == id && data.saved is bool && data.visited is bool && data.hidden is bool
+        && (data.reaction == null || data.reaction in ['loved','not_for_me'])
+        && (!data.visited ? data.reaction == null : true)
+        && data.updatedAt == request.time;
+    }
     function validLeaderboardId(id) { return id is string && id.size() == 36 && id.matches('^[0-9a-f-]+$'); }
     function validLeaderboardEntry(data) {
       return exact(data, ['visible','displayName','displayNameNormalized','photoURL','showPhoto','totalJourneys','totalDistanceKm','longestStreak','statsVersion','joinedAt','updatedAt'])
@@ -48,6 +96,32 @@ service cloud.firestore {
             && getAfter(leaderboardOwnerPath(request.resource.data.leaderboardId)).data.ownerUid == request.auth.uid));
       allow delete: if false;
 
+      match /exploreInteractions/{findId} {
+        allow get, list: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && validInteraction(request.resource.data, findId);
+        allow delete: if signedIn() && request.auth.uid == uid;
+      }
+
+      match /exploreSubmissions/{findId} {
+        allow get, list: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid
+          && exact(request.resource.data, ['findId','title','stationId','stationName','status','moderationMessage','createdAt','updatedAt'])
+          && request.resource.data.findId == findId
+          && request.resource.data.status == 'pending'
+          && request.resource.data.moderationMessage == null
+          && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time
+          && existsAfter(exploreFindPath(findId))
+          && existsAfter(exploreOwnerPath(findId))
+          && getAfter(exploreOwnerPath(findId)).data.ownerUid == uid;
+        allow update: if enabledAdmin()
+          || (signedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','stationId','stationName','status','moderationMessage','updatedAt'])
+            && request.resource.data.status in ['pending','removed']
+            && request.resource.data.moderationMessage == null
+            && request.resource.data.updatedAt == request.time);
+        allow delete: if false;
+      }
     }
 
     match /leaderboardOwners/{leaderboardId} {
@@ -130,6 +204,119 @@ service cloud.firestore {
         && getAfter(journeyPath(request.resource.data.journeyId)).data.fromStationId == request.resource.data.fromStationId
         && getAfter(journeyPath(request.resource.data.journeyId)).data.toStationId == request.resource.data.toStationId;
       allow update, delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || enabledAdmin());
+      allow list: if enabledAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /exploreEligibility/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && exact(request.resource.data, ['totalJourneys','totalDistanceKm','eligible','statsVersion','calculatedAt'])
+        && request.resource.data.totalJourneys is int && request.resource.data.totalJourneys >= 0 && request.resource.data.totalJourneys <= 100000
+        && request.resource.data.totalDistanceKm is number && request.resource.data.totalDistanceKm >= 0 && request.resource.data.totalDistanceKm <= 10000000
+        && request.resource.data.eligible == (request.resource.data.totalJourneys >= 5 && request.resource.data.totalDistanceKm >= 25)
+        && request.resource.data.statsVersion == 1 && request.resource.data.calculatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /exploreFindOwners/{findId} {
+      allow get: if signedIn() && (resource.data.ownerUid == request.auth.uid || enabledAdmin());
+      allow list: if enabledAdmin();
+      allow create: if signedIn() && !exists(exploreOwnerPath(findId))
+        && exact(request.resource.data, ['ownerUid','origin','createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.origin in ['community','admin']
+        && request.resource.data.createdAt == request.time
+        && existsAfter(exploreFindPath(findId))
+        && (
+          (request.resource.data.origin == 'community'
+            && getAfter(exploreFindPath(findId)).data.status == 'pending'
+            && existsAfter(exploreSubmissionPath(request.auth.uid, findId)))
+          ||
+          (request.resource.data.origin == 'admin'
+            && enabledAdmin()
+            && getAfter(exploreFindPath(findId)).data.status == 'published'
+            && getAfter(exploreFindPath(findId)).data.authorType == 'veyro_team')
+        );
+      allow update, delete: if false;
+    }
+
+    match /exploreFinds/{findId} {
+      allow get: if signedIn() && (resource.data.status == 'published' || enabledAdmin() || ownsExploreFind(findId));
+      allow list: if signedIn() && (resource.data.status == 'published' || enabledAdmin());
+      allow create: if signedIn() && validExploreFind(request.resource.data)
+        && (
+          (enabledAdmin() && request.resource.data.status == 'published'
+            && request.resource.data.authorType == 'veyro_team'
+            && request.resource.data.authorBadge == 'Veyro Curated')
+          ||
+          (exists(exploreEligibilityPath(request.auth.uid))
+            && get(exploreEligibilityPath(request.auth.uid)).data.eligible == true
+            && get(exploreEligibilityPath(request.auth.uid)).data.totalJourneys >= 5
+            && get(exploreEligibilityPath(request.auth.uid)).data.totalDistanceKm >= 25
+            && request.resource.data.status == 'pending'
+            && request.resource.data.authorType == 'local_explorer'
+            && request.resource.data.authorBadge == 'Local Explorer'
+            && request.resource.data.loveCount == 0
+            && request.resource.data.publishedAt == null
+            && request.resource.data.verifiedAt == null
+            && existsAfter(exploreOwnerPath(findId))
+            && getAfter(exploreOwnerPath(findId)).data.ownerUid == request.auth.uid
+            && existsAfter(exploreSubmissionPath(request.auth.uid, findId)))
+        )
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if enabledAdmin() && validExploreFind(request.resource.data)
+        || (ownsExploreFind(findId) && validExploreFind(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','title','description','stationId','stationName','category','walkingMinutes','walkingTimeType','costType','bestTimes','environment','latitude','longitude','accessibilityNote','updatedAt'])
+          && request.resource.data.status in ['pending','removed']
+          && request.resource.data.authorType == resource.data.authorType
+          && request.resource.data.authorBadge == resource.data.authorBadge
+          && request.resource.data.authorDisplayName == resource.data.authorDisplayName
+          && request.resource.data.loveCount == resource.data.loveCount
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.publishedAt == resource.data.publishedAt
+          && request.resource.data.updatedAt == request.time)
+        || (signedIn() && resource.data.status == 'published'
+          && validExploreFind(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['loveCount','updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && exists(exploreInteractionPath(request.auth.uid, findId))
+          && existsAfter(exploreInteractionPath(request.auth.uid, findId))
+          && getAfter(exploreInteractionPath(request.auth.uid, findId)).data.visited == true
+          && (
+            (get(exploreInteractionPath(request.auth.uid, findId)).data.reaction != 'loved'
+              && getAfter(exploreInteractionPath(request.auth.uid, findId)).data.reaction == 'loved'
+              && request.resource.data.loveCount == resource.data.loveCount + 1)
+            ||
+            (get(exploreInteractionPath(request.auth.uid, findId)).data.reaction == 'loved'
+              && getAfter(exploreInteractionPath(request.auth.uid, findId)).data.reaction != 'loved'
+              && request.resource.data.loveCount == resource.data.loveCount - 1
+              && request.resource.data.loveCount >= 0)
+          ));
+      allow delete: if false;
+    }
+
+    match /exploreReports/{reportId} {
+      allow get: if enabledAdmin() || (signedIn() && resource.data.reporterUid == request.auth.uid);
+      allow list: if enabledAdmin();
+      allow create: if signedIn()
+        && exact(request.resource.data, ['findId','reporterUid','reason','details','status','createdAt','reviewedAt'])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reason in ['place_closed','incorrect_location','unsafe_or_restricted','misleading_description','advertisement','private_information','other']
+        && (request.resource.data.details == null || (request.resource.data.details is string && request.resource.data.details.size() <= 300))
+        && request.resource.data.status == 'open' && request.resource.data.createdAt == request.time && request.resource.data.reviewedAt == null
+        && exists(exploreFindPath(request.resource.data.findId));
+      allow update: if enabledAdmin();
+      allow delete: if false;
+    }
+
+    match /exploreSourceRecords/{findId} {
+      allow read, write: if enabledAdmin();
     }
 
     match /stations/{stationId} { allow read: if true; allow write: if false; }

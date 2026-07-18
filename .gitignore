@@ -6,6 +6,7 @@ out/
 firebase-debug.log
 firestore-debug.log
 coverage/
+tsconfig.tsbuildinfo
 .DS_Store
 
 certificates

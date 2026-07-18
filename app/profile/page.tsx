@@ -15,6 +15,7 @@ import { useScannerStore } from "@/features/scanner/scanner-context";
 import { publicDisplayNameSchema } from "@/lib/validation/schemas";
 import { calculateJourneyInsights } from "@/lib/insights/journey-insights";
 import { ProfileLeaderboardSettings } from "@/components/leaderboard/profile-leaderboard-settings";
+import { ExploreProfileSummary } from "@/components/explore/ExploreProfileSummary";
 
 export default function ProfilePage() {
   const auth = useAuth(); const scanner = useScannerStore();
@@ -56,6 +57,7 @@ export default function ProfilePage() {
       <Link href="/passport/" className="secondary-button">Open Passport <ArrowRight size={17}/></Link>
     </section>
     {auth.user && <ProfileLeaderboardSettings uid={auth.user.uid} displayName={auth.displayName} photoURL={auth.photoURL} journeys={journeys} demo={auth.demo}/>}
+    {auth.user && <ExploreProfileSummary uid={auth.user.uid} journeys={journeys}/>}
     <div className="card privacy-card"><ShieldCheck className="text-accent"/><div><h2>Privacy by design</h2><p>Ticket images are processed in your browser and never uploaded. Your profile photo comes directly from your Google account.</p></div></div>
     <button className="secondary-button danger w-full" onClick={() => { scanner.clearScan(); void auth.logout(); }}><LogOut size={18}/>Log out</button>
     <p className="version">Veyro Phase 1 · 0.1.0</p>
