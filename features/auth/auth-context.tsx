@@ -52,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) throw new Error("AUTH_REQUIRED");
     await updateProfile(user, { displayName: parsedName });
     await updateDoc(doc(requireClient().db, "users", user.uid), { displayName: parsedName, lastSeenAt: serverTimestamp() });
+    await import("@/lib/leaderboard/sync-leaderboard-entry")
+      .then(({ syncLeaderboardIdentity }) => syncLeaderboardIdentity(user.uid, parsedName, user.photoURL))
+      .catch(() => undefined);
     setDisplayName(parsedName);
   }, [demo, user]);
   const logout = useCallback(async () => { if (demo) { setUser(null); return; } await signOut(requireClient().auth); }, [demo]);

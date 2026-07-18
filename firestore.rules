@@ -1,52 +1,82 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function exact(data, fields) { return data.keys().hasOnly(fields) && data.keys().hasAll(fields); }
+    function validTicketKey(key) { return key is string && key.size() >= 11 && key.size() <= 934 && key.matches('^[A-Za-z0-9_-]+$'); }
+    function journeyPath(id) { return /databases/$(database)/documents/journeys/$(id); }
+    function claimPath(key) { return /databases/$(database)/documents/ticketClaims/$(key); }
+    function payloadPath(key) { return /databases/$(database)/documents/privateTicketPayloads/$(key); }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function leaderboardOwnerPath(id) { return /databases/$(database)/documents/leaderboardOwners/$(id); }
+    function validLeaderboardId(id) { return id is string && id.size() == 36 && id.matches('^[0-9a-f-]+$'); }
+    function validLeaderboardEntry(data) {
+      return exact(data, ['visible','displayName','displayNameNormalized','photoURL','showPhoto','totalJourneys','totalDistanceKm','longestStreak','statsVersion','joinedAt','updatedAt'])
+        && data.visible is bool
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 30
+        && data.displayNameNormalized is string && data.displayNameNormalized.size() >= 1 && data.displayNameNormalized.size() <= 30
+        && data.showPhoto is bool
+        && ((!data.showPhoto && data.photoURL == null) || (data.showPhoto && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048))))
+        && data.totalJourneys is int && data.totalJourneys >= 0 && data.totalJourneys <= 100000
+        && data.totalDistanceKm is number && data.totalDistanceKm >= 0 && data.totalDistanceKm <= 10000000
+        && data.longestStreak is int && data.longestStreak >= 0 && data.longestStreak <= 10000
+        && data.statsVersion == 1;
     }
-
-    function exact(data, fields) {
-      return data.keys().hasOnly(fields) && data.keys().hasAll(fields);
-    }
-
-    function validTicketKey(key) {
-      return key is string
-        && key.size() >= 11
-        && key.size() <= 934
-        && key.matches('^[A-Za-z0-9_-]+$');
-    }
-
-    function journeyPath(id) {
-      return /databases/$(database)/documents/journeys/$(id);
-    }
-
-    function claimPath(key) {
-      return /databases/$(database)/documents/ticketClaims/$(key);
-    }
-
-    function payloadPath(key) {
-      return /databases/$(database)/documents/privateTicketPayloads/$(key);
+    function ownsLeaderboard(id) {
+      return signedIn() && exists(leaderboardOwnerPath(id))
+        && get(leaderboardOwnerPath(id)).data.ownerUid == request.auth.uid;
     }
 
     match /users/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
       allow list: if false;
-      allow create: if signedIn()
-        && request.auth.uid == uid
+      allow create: if signedIn() && request.auth.uid == uid
         && exact(request.resource.data, ['uid','displayName','email','photoURL','createdAt','lastSeenAt'])
-        && request.resource.data.uid == uid
-        && request.resource.data.email is string
+        && request.resource.data.uid == uid && request.resource.data.email is string
         && request.resource.data.displayName is string
         && (request.resource.data.photoURL == null || request.resource.data.photoURL is string)
+        && request.resource.data.createdAt == request.time && request.resource.data.lastSeenAt == request.time;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','photoURL','lastSeenAt','leaderboardId'])
+        && request.resource.data.displayName is string
+        && (request.resource.data.photoURL == null || request.resource.data.photoURL is string)
+        && request.resource.data.lastSeenAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['leaderboardId'])
+          || (!resource.data.keys().hasAny(['leaderboardId'])
+            && validLeaderboardId(request.resource.data.leaderboardId)
+            && existsAfter(leaderboardOwnerPath(request.resource.data.leaderboardId))
+            && getAfter(leaderboardOwnerPath(request.resource.data.leaderboardId)).data.ownerUid == request.auth.uid));
+      allow delete: if false;
+
+    }
+
+    match /leaderboardOwners/{leaderboardId} {
+      allow get: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow list: if false;
+      allow create: if signedIn() && validLeaderboardId(leaderboardId)
+        && !exists(leaderboardOwnerPath(leaderboardId))
+        && exact(request.resource.data, ['ownerUid','createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.createdAt == request.time
-        && request.resource.data.lastSeenAt == request.time;
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['displayName','photoURL','lastSeenAt'])
-        && request.resource.data.displayName is string
-        && (request.resource.data.photoURL == null || request.resource.data.photoURL is string)
-        && request.resource.data.lastSeenAt == request.time;
+        && existsAfter(userPath(request.auth.uid))
+        && getAfter(userPath(request.auth.uid)).data.leaderboardId == leaderboardId;
+      allow update, delete: if false;
+    }
+
+    match /leaderboardEntries/{leaderboardId} {
+      allow get: if resource.data.visible == true || ownsLeaderboard(leaderboardId);
+      allow list: if resource.data.visible == true;
+      allow create: if signedIn() && validLeaderboardId(leaderboardId)
+        && !exists(/databases/$(database)/documents/leaderboardEntries/$(leaderboardId))
+        && existsAfter(leaderboardOwnerPath(leaderboardId))
+        && getAfter(leaderboardOwnerPath(leaderboardId)).data.ownerUid == request.auth.uid
+        && validLeaderboardEntry(request.resource.data)
+        && request.resource.data.joinedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if ownsLeaderboard(leaderboardId)
+        && validLeaderboardEntry(request.resource.data)
+        && request.resource.data.joinedAt == resource.data.joinedAt
+        && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
 
@@ -55,27 +85,16 @@ service cloud.firestore {
       allow create: if signedIn()
         && exact(request.resource.data, ['ownerUid','fromStationId','fromStationName','toStationId','toStationName','stationIntervals','distanceKm','scannedAt','ocrConfidence','ticketReference','createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.fromStationId is string
-        && request.resource.data.fromStationId.size() > 0
-        && request.resource.data.toStationId is string
-        && request.resource.data.toStationId.size() > 0
+        && request.resource.data.fromStationId is string && request.resource.data.fromStationId.size() > 0
+        && request.resource.data.toStationId is string && request.resource.data.toStationId.size() > 0
         && request.resource.data.fromStationId != request.resource.data.toStationId
-        && request.resource.data.fromStationName is string
-        && request.resource.data.fromStationName.size() > 0
-        && request.resource.data.toStationName is string
-        && request.resource.data.toStationName.size() > 0
-        && request.resource.data.stationIntervals is int
-        && request.resource.data.stationIntervals >= 1
-        && request.resource.data.stationIntervals <= 30
-        && request.resource.data.distanceKm is number
-        && request.resource.data.distanceKm > 0
-        && request.resource.data.distanceKm <= 50
-        && request.resource.data.ocrConfidence is number
-        && request.resource.data.ocrConfidence >= 0.72
-        && request.resource.data.ocrConfidence <= 1
+        && request.resource.data.fromStationName is string && request.resource.data.fromStationName.size() > 0
+        && request.resource.data.toStationName is string && request.resource.data.toStationName.size() > 0
+        && request.resource.data.stationIntervals is int && request.resource.data.stationIntervals >= 1 && request.resource.data.stationIntervals <= 30
+        && request.resource.data.distanceKm is number && request.resource.data.distanceKm > 0 && request.resource.data.distanceKm <= 50
+        && request.resource.data.ocrConfidence is number && request.resource.data.ocrConfidence >= 0.72 && request.resource.data.ocrConfidence <= 1
         && validTicketKey(request.resource.data.ticketReference)
-        && request.resource.data.scannedAt == request.time
-        && request.resource.data.createdAt == request.time
+        && request.resource.data.scannedAt == request.time && request.resource.data.createdAt == request.time
         && !exists(claimPath(request.resource.data.ticketReference))
         && existsAfter(claimPath(request.resource.data.ticketReference))
         && existsAfter(payloadPath(request.resource.data.ticketReference))
@@ -87,12 +106,9 @@ service cloud.firestore {
     match /ticketClaims/{ticketKey} {
       allow get: if signedIn();
       allow list: if false;
-      allow create: if signedIn()
-        && validTicketKey(ticketKey)
-        && !exists(claimPath(ticketKey))
+      allow create: if signedIn() && validTicketKey(ticketKey) && !exists(claimPath(ticketKey))
         && exact(request.resource.data, ['claimed','createdAt'])
-        && request.resource.data.claimed == true
-        && request.resource.data.createdAt == request.time
+        && request.resource.data.claimed == true && request.resource.data.createdAt == request.time
         && existsAfter(payloadPath(ticketKey))
         && getAfter(payloadPath(ticketKey)).data.ownerUid == request.auth.uid;
       allow update, delete: if false;
@@ -100,21 +116,14 @@ service cloud.firestore {
 
     match /privateTicketPayloads/{ticketKey} {
       allow read: if false;
-      allow create: if signedIn()
-        && validTicketKey(ticketKey)
-        && !exists(payloadPath(ticketKey))
+      allow create: if signedIn() && validTicketKey(ticketKey) && !exists(payloadPath(ticketKey))
         && exact(request.resource.data, ['rawQrValue','ownerUid','journeyId','fromStationId','toStationId','scannedAt'])
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.rawQrValue is string
-        && request.resource.data.rawQrValue.size() >= 8
-        && request.resource.data.rawQrValue.size() <= 700
-        && request.resource.data.journeyId is string
-        && request.resource.data.fromStationId is string
-        && request.resource.data.toStationId is string
+        && request.resource.data.rawQrValue is string && request.resource.data.rawQrValue.size() >= 8 && request.resource.data.rawQrValue.size() <= 700
+        && request.resource.data.journeyId is string && request.resource.data.fromStationId is string && request.resource.data.toStationId is string
         && request.resource.data.fromStationId != request.resource.data.toStationId
         && request.resource.data.scannedAt == request.time
-        && !exists(claimPath(ticketKey))
-        && existsAfter(claimPath(ticketKey))
+        && !exists(claimPath(ticketKey)) && existsAfter(claimPath(ticketKey))
         && existsAfter(journeyPath(request.resource.data.journeyId))
         && getAfter(journeyPath(request.resource.data.journeyId)).data.ownerUid == request.auth.uid
         && getAfter(journeyPath(request.resource.data.journeyId)).data.ticketReference == ticketKey
@@ -123,13 +132,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /stations/{stationId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /stations/{stationId} { allow read: if true; allow write: if false; }
+    match /{document=**} { allow read, write: if false; }
   }
 }

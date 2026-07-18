@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
+    "seed:leaderboard": "node scripts/seed-leaderboard.mjs",
+    "feature:leaderboard-user": "node scripts/feature-leaderboard-user.mjs"
   },
   "dependencies": {
     "@zxing/browser": "latest",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Home, ScanLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, Home, ScanLine, ShieldCheck, Trophy } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 import { BrandMark } from "@/components/ui/brand-mark";
@@ -35,6 +35,7 @@ export default function LandingPage() {
     <nav data-hero>
       <span className="brand"><BrandMark/>Veyro</span>
       <div className="landing-nav-actions">
+        <Link href="/leaderboard/" className="text-link"><Trophy size={17}/>Leaderboard</Link>
         {loading
           ? <span className="landing-auth-placeholder" aria-label="Checking sign-in status"/>
           : <Link href={signedIn ? "/home/" : "/login/"} className="text-link">
@@ -58,12 +59,12 @@ export default function LandingPage() {
             : "Scan your metro ticket, save the journey and build your personal travel story."}
         </p>
         <div data-hero className="hero-actions">
-          {loading ? <span className="primary-button landing-loading-action">Checking your journey…</span> : signedIn
-            ? <Link href="/home/" className="primary-button">Open Dashboard <ArrowRight size={18}/></Link>
-            : <>
-              <Link href="/register/" className="primary-button">Continue with Google <ArrowRight size={18}/></Link>
-              <Link href="/login/" className="secondary-button">Sign in</Link>
-            </>}
+          {loading ? <span className="primary-button landing-loading-action">Checking your journey…</span> : signedIn ? <>
+            <Link href="/home/" className="primary-button">Open Dashboard <ArrowRight size={18}/></Link>
+          </> : <>
+            <Link href="/register/" className="primary-button">Continue with Google <ArrowRight size={18}/></Link>
+            <Link href="/login/" className="secondary-button">Sign in</Link>
+          </>}
         </div>
       </div>
 
@@ -75,7 +76,9 @@ export default function LandingPage() {
         <div className="floating-card one">
           {signedIn ? <><Home/>Your journal is ready</> : <><ScanLine/>One scan, one story</>}
         </div>
-        <div className="floating-card two"><ShieldCheck/>Processed privately</div>
+        <div className="floating-card two">
+          <><ShieldCheck/>Processed privately</>
+        </div>
       </div>
     </section>
   </main>;

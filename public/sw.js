@@ -1,5 +1,5 @@
 const CACHE = "veyro-shell-v7";
-const SHELL = ["/", "/login/", "/register/", "/home/", "/profile/", "/manifest.webmanifest", "/favicon.ico", "/logo.png", "/icons/icon-192.png", "/icons/icon-512.png"];
+const SHELL = ["/", "/login/", "/register/", "/home/", "/scan/", "/journeys/", "/passport/", "/passport/share/", "/leaderboard/", "/profile/", "/manifest.webmanifest", "/favicon.ico", "/logo.png", "/icons/icon-192.png", "/icons/icon-512.png"];
 self.addEventListener("install", (event) => event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL))));
 self.addEventListener("activate", (event) => event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))));
 self.addEventListener("fetch", (event) => {

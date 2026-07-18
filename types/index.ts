@@ -6,6 +6,7 @@ export type UserProfile = {
   displayName: string;
   email: string;
   photoURL: string | null;
+  leaderboardId?: string;
   createdAt?: Timestamp;
   lastSeenAt?: Timestamp;
 };

@@ -80,6 +80,9 @@ export async function addJourney(input: {
       });
     });
     allJourneysCache.delete(input.ownerUid);
+    await import("@/lib/leaderboard/sync-leaderboard-entry")
+      .then(({ syncLeaderboardEntryForUser }) => syncLeaderboardEntryForUser(input.ownerUid))
+      .catch(() => null);
     return { ...safe, scannedAt: new Date(), createdAt: new Date() };
   } finally {
     rawQrValue = null;
