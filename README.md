@@ -1,141 +1,303 @@
+<p align="center">
+  <img src="public/logo.png" alt="Veyro gold metro-line logo" width="112">
+</p>
+
 # Veyro
 
-Veyro is a mobile-first, privacy-conscious Kochi Metro journey journal. A signed-in rider chooses Take Photo to open the phone's native camera or Choose Image to use an existing photo. The browser detects the QR code, reads the visible route from that same image with OCR, validates the stations, and atomically adds a journey to Cloud Firestore.
+**Every ride leaves a mark.**
 
-The product is a journey logger, not a ticket validator. It does not decode the Metro's internal QR format, create tickets, validate entry, track location, or support check-in/check-out.
+Veyro is a privacy-first public-transport engagement and city-discovery platform for Kochi Metro travellers. It converts a one-time ticket scan into journey progress, Passport insights, community rankings and personalised recommendations around the metro network—without continuously tracking the rider.
 
-## Veyro Passport and Travel Insights
+**Veyro turns every metro ticket into motivation to travel, explore and participate.**
 
-The protected `/passport/` page turns the signed-in rider's existing journey documents into an endpoint-based station passport, network coverage, local-calendar journey streaks, six-month activity, monthly comparisons, and personal travel records. Every operational station appears in route order. A station is stamped only when it was an origin or destination; intermediate stations are deliberately not inferred.
+![Next.js](https://img.shields.io/badge/Next.js-static_export-0d0d0c?style=flat-square&logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Spark_compatible-ffca28?style=flat-square&logo=firebase&logoColor=0d0d0c)
+![PWA](https://img.shields.io/badge/PWA-installable-d99c4d?style=flat-square)
+![Privacy](https://img.shields.io/badge/design-privacy--first-9a6930?style=flat-square)
+![Deployment](https://img.shields.io/badge/deployment-static_export-5c482f?style=flat-square)
 
-Passport metrics are calculated in the browser and are never written back as editable aggregate documents. Home, Profile, and Passport share a short-lived in-memory promise cache for the user's one-time, paginated journey reads. There are no permanent Firestore listeners.
+> Independent traveller-created project. Not affiliated with or endorsed by Kochi Metro Rail Limited.
 
-The share action creates a public `/passport/share/` link containing a validated, Base64URL-encoded recap in the URL fragment. The fragment is handled only in the browser and is not sent to Firebase Hosting. It contains only the public display name and safe aggregate travel statistics—not an email, UID, ticket reference, QR value, ticket image, journey ID, or exact journey time. No public Firestore document is created and opening a recap link performs no account read. Because the recap is client-created and has no trusted backend signature, it is a personal story card rather than a verified official record.
+**Live demo:** No public deployment URL is recorded in this repository. [Run Veyro locally](#local-setup) · **Source:** [github.com/shayen71421/veyro](https://github.com/shayen71421/veyro)
 
-Statistics use deterministic tie handling: station ties sort by official station name and then station ID; route ties sort by the directed route key; longest-journey ties use the earliest journey date and then journey ID. Streaks deduplicate local calendar dates, and a current streak remains active only when the latest travel day is today or yesterday.
+[Demo](#demo-walkthrough) · [Why Veyro](#why-veyro) · [Features](#feature-overview) · [Architecture](#how-veyro-works) · [Privacy](#privacy-by-design) · [Local Setup](#local-setup)
 
-## Veyro Community Leaderboard
+## See Veyro in action
 
-The public `/leaderboard/` route offers three opt-in categories only: Distance, Journeys, and Best Streak. Anyone can view safe, visible leaderboard summaries; signing in is required to join, leave, synchronize statistics, or see a personal rank. Best Streak uses the stable longest historical streak rather than the current streak. Each category performs a one-time, cached `limit(5)` query; Home loads only Distance, Passport loads the three personal ranks only after the rider opens that section, and manual refresh clears the session cache. No Firestore listeners or scheduled work are used.
+### Product screenshots
 
-Participation is optional and profile-photo visibility defaults to off. On first join, the browser generates a random UUID. The UID-to-public-ID relationship is kept privately in `users/{uid}.leaderboardId` and the non-listable `leaderboardOwners/{leaderboardId}` collection. The public `leaderboardEntries/{leaderboardId}` document contains only:
+No product screenshots are currently committed to the repository. The application can be run locally using the steps below; this section deliberately avoids fake or broken preview images.
 
-- Public display name and normalized display name
-- Optional explicitly enabled Google profile photo
-- Total journeys, total distance, and longest streak
-- Visibility, version, and join/update timestamps
+<!-- TODO(hackathon-media): Add public/screenshots/dashboard.png showing the signed-in Home dashboard. -->
+<!-- TODO(hackathon-media): Add public/screenshots/ticket-verification.png showing a detected route without ticket-private data. -->
+<!-- TODO(hackathon-media): Add public/screenshots/passport.png showing station progress and travel insights. -->
+<!-- TODO(hackathon-media): Add public/screenshots/explore.png showing the personalised Veyro Finds feed. -->
+<!-- TODO(hackathon-media): Add public/screenshots/leaderboard.png showing the three public ranking categories. -->
 
-It never contains a Firebase UID, email, ticket data, QR value, journey ID, route, or exact journey timestamp. Leaving sets `visible` to false and keeps private journeys untouched. Rules require exact public fields, validate numeric limits, preserve `joinedAt`, and permit updates only through the private ownership mapping. Deploy both the updated rules and composite indexes with `firebase deploy --only firestore`.
+The user journey is designed around one ticket image:
 
-Top-five rows use deterministic category-specific secondary tie-breakers. Spark-efficient public positions use Firestore count aggregation for entries with a strictly greater primary metric, so primary-metric ties share a competition rank such as `1, 2, 2, 4`.
+1. **Sign in with Google.**
+2. **Take or choose a ticket photo.**
+3. **Veyro reads the QR and visible route locally in the browser.**
+4. **Confirm the automatically detected journey—stations cannot be manually edited.**
+5. **Build Passport progress, kilometres and streaks.**
+6. **Discover Veyro Finds around the metro network.**
 
-### Spark-only leaderboard limitation
+## Why Veyro?
 
-Leaderboard summaries are calculated in the browser from the rider's Veyro journeys and the interface provides no manual metric editing. Because this Spark-only architecture has no trusted backend, a technically skilled person who modifies the client can attempt to submit altered summary statistics. The leaderboard is therefore a community feature, not a cheat-proof or independently verified Metro record. Production-grade verification would require a trusted backend, which remains deliberately outside this project.
+Public transport is usually treated as a transaction: buy a ticket, complete a trip and move on. The digital relationship often ends at the gate, leaving little sense of progress, community or discovery around everyday metro use.
 
-### Showcase leaderboard seed
+Mobility and fitness products can add engagement, but many depend on continuous location tracking. Veyro starts from a ticket-backed journey record instead, giving travellers useful personal insights without following their movement throughout the day.
 
-For hackathon demonstrations, `npm run seed:leaderboard` writes ten deterministic showcase profiles to the configured production Firestore project. The script uses the already authenticated Firebase CLI developer session and is not included in the browser bundle. It creates matching private user/ownership records and visible public leaderboard summaries. Synthetic `veyro.demo.*@sahrdaya.ac.in` addresses are stored only in protected user documents and are never published in leaderboard entries. Running the command again updates the same deterministic records rather than creating duplicates.
+This creates room for public-transport challenges, station exploration, local discovery and community participation that could serve colleges, employers, events and neighbourhood communities—while remaining clearly separate from official ticketing and passenger systems.
 
-## Veyro Explore and Veyro Finds
+## From ticket transaction to travel habit
 
-The protected `/explore/` experience is a bounded, one-time-read discovery layer around operational Kochi Metro stations. Community recommendations are called **Veyro Finds**. They are traveller-created or “Veyro Curated”; neither label means an official Kochi Metro recommendation.
+Veyro is an engagement layer built around an existing metro ticket:
 
-Explore uses an explainable browser-only score from endpoint frequency, recent endpoints, stations along common routes, private loved/saved/category signals, curated status, community love, freshness, and new-station opportunities. Exact scores and journey counts are never published. Hidden and exact “Not for Me” Finds are excluded; visited Finds receive a ranking penalty. Ties use score, love count, publication date, and public Find ID. Candidate reads are bounded to relevant stations, popular, recent, and curated pools, merged by Find ID, and cached only in memory for the current session. No snapshot listeners, AI APIs, full-collection text search, or private travel-profile documents are used.
-
-A journey ending at a station never marks any place visited. Places enter `users/{uid}/exploreInteractions` only when the rider explicitly taps **Mark as Visited**. Saves, visits, hidden choices, “Not for Me,” and visit dates remain private. **Loved It** is available only after an explicit visit and changes the public `loveCount` by exactly one through a Firestore transaction. There is no public dislike counter.
-
-### Local Explorer and moderation
-
-Local Explorer submission eligibility requires both five valid Veyro journeys and 25 km. The browser calculates this from the rider’s existing journeys and writes a versioned snapshot to `exploreEligibility/{uid}`. Community submissions are atomically created with a private owner mapping and owner-facing summary and always start as `pending`. They cannot be self-published. Published edits return to pending review.
-
-The protected `/admin/explore/` route checks `admins/{uid}` through Firestore Rules. Enabled administrators can review pending Finds, approve or reject with a message, hide/restore/remove published content, review reports, and read private source records. There is no email allowlist or public “Become Admin” action.
-
-Because Spark has no trusted backend, a modified client can attempt to forge eligibility or manipulate engagement using multiple accounts. Rules constrain schemas, ownership, eligibility thresholds, status transitions, and reaction deltas, while mandatory administrator approval limits forged submission impact. Explore is community guidance, not a cheat-proof or independently verified record.
-
-### Local administrator bootstrap
-
-The Admin SDK exists only in `devDependencies` and `scripts/`; it is never imported by client code or deployed to Hosting. Prefer a service account stored outside the repository:
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/absolute/private/path/service-account.json"
-export FIREBASE_PROJECT_ID="your-project-id"
-npm run admin:grant -- --uid=<FIREBASE_UID>
+```text
+Ride the metro
+      ↓
+Scan one ticket
+      ↓
+Build travel progress
+      ↓
+Compete and maintain streaks
+      ↓
+Discover places near the network
+      ↓
+Contribute Finds after earning trust
 ```
 
-For a trusted local workstation, the scripts can alternatively use the currently authenticated Firebase CLI developer session after `npx firebase login --reauth`. Firebase CLI exposes that account as an authorized-user application-default credential under the user’s Firebase configuration directory; it is never printed or copied into the project.
+It does **not** replace Kochi Metro ticketing, metro gates, navigation applications or official passenger systems. Veyro adds motivation, discovery and community around the journey.
 
-Revoke administrative access without deleting journeys, submissions, or interactions:
+## What makes Veyro different?
 
-```bash
-npm run admin:revoke -- --uid=<FIREBASE_UID>
+### Ticket-backed, not GPS-dependent
+
+A rider records a journey from an existing ticket image. Veyro does not continuously track the person or infer their location after the scan.
+
+### One scan, multiple outcomes
+
+The same scan can update journey history, distance, streaks, Veyro Passport progress, leaderboard summaries and the private travel profile used by Explore.
+
+### Explainable city discovery
+
+The personalised Explore feed ranks real Veyro Finds using journey endpoints, route relevance, curated status, community love and the rider's private reactions. It uses deterministic scoring rather than an external AI service.
+
+### Trust earned through travel
+
+Local Explorer access requires at least five journeys and 25 km. Community Finds always begin as pending and require administrator approval before publication.
+
+### Designed for the Firebase free tier
+
+Veyro combines a static Next.js export, browser OCR, bounded one-time reads and Firestore transactions. It needs no billing-dependent application backend, image storage or paid map API.
+
+## Feature overview
+
+| Product area | Implemented capabilities |
+| --- | --- |
+| **Journey intelligence** | One-photo ticket capture; native camera and image picker; `BarcodeDetector` with ZXing fallback; browser OCR for From and To; validation against 25 operational Kochi Metro stations; route distance and station intervals; duplicate-ticket prevention; private journey history; shareable journey image |
+| **Veyro Passport** | Endpoint-based station stamps; network exploration percentage; current and longest streaks; six-month activity; monthly comparisons; personal records; shareable traveller-created recap link |
+| **Community leaderboard** | Distance, Journeys and Best Streak only; public top five; personal rank for opted-in users; optional participation; private profile-photo control; deterministic top-five ordering |
+| **Veyro Explore** | Personalised For You feed; Finds near frequent routes; Discover Somewhere New; Veyro Curated recommendations; station and category filters; Save; Mark as Visited; Loved It; private Not for Me; Google Maps links; no image uploads |
+| **Local Explorer and moderation** | Unlock after five journeys and 25 km; submit real places near verified stations; pending review; administrator approval and rejection; report handling; private research-source records; validated, idempotent seed workflow |
+| **Mobile experience** | Mobile-first PWA; native camera/file picker; warm black, bronze and gold design system; GSAP transitions; reduced-motion support; safe-area handling; responsive layout designed for widths from 320 px |
+
+Visited stations in Passport are journey endpoints only. Intermediate stations may improve recommendation relevance, but Veyro never marks them—or a nearby place—as visited automatically.
+
+## Demo walkthrough
+
+This sequence fits a focused hackathon presentation:
+
+1. Open Veyro and continue with Google.
+2. Show the Home dashboard, journey totals and the Explore preview.
+3. Take or choose a prepared metro ticket image. Development demo mode can alternatively simulate a successful, duplicate or unreadable ticket.
+4. Show QR detection, local OCR and automatic route verification.
+5. Add the journey and reveal the travel-pass result card.
+6. Open Veyro Passport to show station stamps, network coverage, streaks and monthly activity.
+7. Open the public leaderboard and switch between Distance, Journeys and Best Streak.
+8. Open the personalised Explore feed, explicitly mark a Veyro Find as visited and react with Loved It or Not for Me.
+9. With a prepared eligible account, show how a Local Explorer submits a Find that enters pending administrator review.
+
+Demo simulations are application demonstrations, not Metro ticket validation.
+
+## Where Veyro can go next
+
+### Available today
+
+- Google sign-in and protected traveller pages
+- One-image QR and route recognition in the browser
+- Atomic duplicate protection and private journey history
+- Veyro Passport, streaks, records and a shareable recap link
+- Opt-in community leaderboards for Distance, Journeys and Best Streak
+- Deterministic, personalised Explore recommendations
+- Private saves, visits, hides and reactions
+- Local Explorer eligibility, pending submissions and administrator moderation
+- Researched Veyro Curated seed infrastructure
+- Static Firebase Hosting deployment and installable PWA shell
+
+### Future potential
+
+- College public-transport challenges
+- Employer sustainable-commute programmes
+- Event-based metro campaigns
+- Station exploration challenges
+- Local business and cultural discovery programmes
+- Privacy-conscious ridership engagement across more cities
+- Trusted validation through a future official transport-partner integration
+
+These are product opportunities, not claims of current partnerships.
+
+## How Veyro works
+
+Ticket processing and journey creation stay client-side until the final Firestore transaction:
+
+```mermaid
+flowchart TD
+    A["Take or choose ticket photo"] --> B["Temporary browser memory"]
+    B --> C["QR detection<br/>BarcodeDetector + ZXing"]
+    B --> D["Visible-route OCR<br/>Tesseract.js"]
+    C --> E["Zod validation + station matching"]
+    D --> E
+    E --> F["Atomic Firestore transaction"]
+    F --> G["ticketClaims<br/>safe duplicate state"]
+    F --> H["privateTicketPayloads<br/>write-only to normal clients"]
+    F --> I["journeys<br/>owner-scoped record"]
+    I --> J["Veyro Passport"]
+    I --> K["Opt-in leaderboard summary"]
+    I --> L["Private Explore travel profile"]
+    M["Google Authentication"] --> F
+    N["Firebase Hosting<br/>static out/"] --> A
 ```
 
-The repository ignores `service-account*.json`, `firebase-admin-key*.json`, and `*-firebase-adminsdk-*.json`. Never commit, print, or embed service-account contents in `NEXT_PUBLIC_*` variables.
+Explore combines bounded public-safe candidates with private, in-browser preferences:
 
-### Researched curated seed
-
-`data/explore-seed.ts` contains 16 conservatively verified Finds across 12 operational stations. Each has at least two evidence records in `data/explore-seed-sources.ts`; source URLs are never copied to the public Find. Research coverage, deferrals, uncertainties, and estimated walking times are documented in `data/explore-seed-report.md`.
-
-Validate without credentials:
-
-```bash
-npm run explore:seed:validate
+```mermaid
+flowchart LR
+    A["Owner-scoped journeys"] --> B["Private travel profile"]
+    C["Private saves, visits and reactions"] --> D["Private category preferences"]
+    E["Bounded published Find queries"] --> F["Deterministic scoring"]
+    B --> F
+    D --> F
+    F --> G["Personalised Explore feed"]
+    G --> C
+    H["Local Explorer submission"] --> I["Pending review"]
+    I --> J["Administrator moderation"]
+    J -->|Approve| E
+    J -->|Reject, hide or remove| K["Non-public status"]
 ```
 
-Credentialed dry run (the default; performs no writes):
+The architecture uses:
 
-```bash
-npm run explore:seed:dry -- --uid=<ENABLED_ADMIN_UID>
+- Browser-only ticket image preprocessing, QR detection and OCR
+- Firebase Google Authentication
+- Cloud Firestore transactions, strict schemas and owner-scoped queries
+- Static Next.js export with no Next.js server runtime
+- Bounded, one-time reads rather than permanent listeners
+- Local Firebase Admin SDK scripts for administration and seeding only
+
+## Privacy by design
+
+| Veyro uses | Veyro does not use |
+| --- | --- |
+| A ticket image temporarily in browser memory | Continuous GPS tracking |
+| Visible route text through local OCR | Ticket image uploads |
+| Private Firestore journey documents | Public journey histories |
+| Explicit user reactions | Automatic place-visit assumptions |
+| Opt-in leaderboard summaries | Public email addresses or Firebase UIDs |
+| Validated public Find coordinates | Paid embedded-map tracking |
+
+- Ticket images are never permanently stored or uploaded.
+- Raw QR values are never shown in the interface, share cards, URLs, logs, analytics, browser storage or service-worker caches.
+- Explore saves, visited-place dates, hidden choices and Not for Me reactions remain private.
+- A public Passport recap uses a URL fragment containing validated, safe aggregate data. The fragment is processed in the browser and is not sent to Firebase Hosting.
+- Public leaderboard participation is optional. Profile-photo sharing defaults to off.
+- Reaching a station does not mean the rider visited a nearby place. A Veyro Find becomes visited only after an explicit **Mark as Visited** action.
+- The service worker caches the static application shell, not ticket images, QR values, private interactions, drafts, reports or Firestore responses.
+
+## Security and integrity boundaries
+
+Veyro is not a ticket validator. It does not decode the Metro's internal QR payload, generate tickets, validate gate entry or claim that a journey is an official Metro record. It is an independent project and is not endorsed by KMRL.
+
+The no-cost Spark architecture has no trusted application backend. A modified client can attempt to manipulate the deterministic ticket key, leaderboard summaries, Local Explorer eligibility or engagement counts. Base64URL is reversible encoding—not encryption, hashing or proof that a key matches a raw QR value.
+
+Firestore Rules, exact schemas, ownership mappings, atomic transactions, immutable journey records and mandatory Find moderation reduce ordinary misuse. They cannot make a client-only system cheat-proof. Production-grade verification would require a trusted backend or transport-partner integration.
+
+> Veyro prioritises a deployable no-cost prototype while documenting where a production partnership would strengthen trust.
+
+## Technical stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js App Router, React, strict TypeScript |
+| Styling | Tailwind CSS and the Veyro warm black, bronze and gold design system |
+| Motion | GSAP with reduced-motion handling |
+| Authentication | Firebase Authentication with Google |
+| Database | Cloud Firestore modular client SDK |
+| QR | Browser `BarcodeDetector`, `@zxing/browser` and `@zxing/library` |
+| OCR | Tesseract.js in the browser |
+| Validation | Zod |
+| UI utilities | Lucide React, date-fns and html-to-image |
+| Hosting | Firebase Hosting serving `out/` |
+| Deployment model | Static Next.js export |
+| Testing | Vitest and Firebase Local Emulator Suite Rules tests |
+
+The Firebase Admin SDK is a development dependency used only by local administration and seed scripts. It is not imported into the client bundle or deployed to Firebase Hosting.
+
+## Built to run without a billing account
+
+Veyro is deliberately compatible with the Firebase Spark plan:
+
+- Next.js uses `output: "export"` and produces static files in `out/`.
+- Firebase Hosting serves the static export without Functions rewrites.
+- Authentication uses Google only—no Phone/SMS authentication.
+- Ticket images and OCR stay in browser memory.
+- Explore cards are text-based; there is no Cloud Storage dependency.
+- Google Maps links are generated from coordinates; there is no paid or embedded map API.
+- Journey history is paginated and Explore candidate pools are bounded.
+- Reads are one-time and session-cached where useful; there are no snapshot listeners.
+- Totals and insights are calculated from owner-scoped journey documents instead of editable aggregate counters.
+
+The repository does **not** use Cloud Functions, Firebase App Hosting, Cloud Run, Cloud Storage, API routes, Server Actions, Firebase Extensions, scheduled jobs, external AI APIs or billing-dependent Google Cloud services.
+
+## Keeping Explore useful
+
+The repository currently contains **16 researched seed candidates across 12 operational stations**. The research pass considered 25 candidates and deferred nine where current evidence, credible coordinates, public access or a reasonable station connection could not be established confidently.
+
+Each accepted Veyro Curated candidate has at least two source records in `data/explore-seed-sources.ts`. Public Find documents do not expose those research URLs; the seed script writes them to administrator-only `exploreSourceRecords`.
+
+Community submissions begin as pending. Enabled administrators can approve, reject with a message, hide, restore or remove Finds and review user reports. Users are reminded that prices, hours, access and local conditions may change and should be checked before visiting. All 16 seed-record walking times are deliberately labelled as estimates.
+
+Veyro Curated means researched by this project. It does not mean official Kochi Metro approval.
+
+## Repository structure
+
+```text
+app/                    Static App Router pages
+components/             Shared UI and product components
+features/               Authentication, scanner and journey state/services
+lib/                    Firebase, OCR, QR, insights, ranking and Explore logic
+data/                   Verified stations and researched Find datasets
+scripts/                Local admin, leaderboard and seed tooling
+tests/                  Unit and Firestore Rules tests
+public/                 PWA manifest, service worker, icons and logo
+firestore.rules         Firestore access-control policy
+firestore.indexes.json  Required composite query indexes
+firebase.json           Hosting, Firestore and emulator configuration
 ```
-
-Apply only after reviewing the report and validation output:
-
-```bash
-npm run explore:seed:apply -- --uid=<ENABLED_ADMIN_UID>
-```
-
-Applying is explicit, idempotent, batched, and `seedVersion`-aware. It writes the public curated Find, private ownership record, and administrator-only source record. Running it twice does not create duplicate Finds. To add or reverify a place, update both seed files with current authoritative evidence, update the report and verification date, increment `seedVersion`, run validation and dry-run, then apply intentionally.
-
-### Explore data and privacy
-
-- `exploreFinds/{findId}`: public-safe content, station/coordinates, author badge, moderation status, and love count
-- `exploreFindOwners/{findId}`: protected UID mapping
-- `users/{uid}/exploreSubmissions/{findId}`: private contributor status and moderation message
-- `users/{uid}/exploreInteractions/{findId}`: private saves, visits, hides, and reactions
-- `exploreReports/{reportId}`: private moderation reports
-- `exploreSourceRecords/{findId}`: administrator-only research evidence
-- `exploreEligibility/{uid}`: owner-only client-calculated eligibility snapshot
-- `admins/{uid}`: protected administrator role and enabled state
-
-Explore stores no images because the Spark architecture deliberately avoids Cloud Storage and public image uploads. It stores validated Kochi-region coordinates and generates a Google Maps search URL in the browser, so no paid map API, embedded map key, scraping, or arbitrary public website URL is needed. Users must verify current access, prices, opening hours, route conditions, and suitability before visiting.
-
-Composite indexes in `firestore.indexes.json` support bounded published queries by station, category, curation, love, publication date, walking time, environment, and cost. Deploy rules and indexes together after local emulator tests:
-
-```bash
-firebase deploy --only firestore
-```
-
-## Stack
-
-- Next.js App Router, strict TypeScript, Tailwind CSS, and static export
-- Firebase Authentication with Google
-- Cloud Firestore client SDK and transactions
-- Firebase Hosting serving `out/`
-- Firebase Local Emulator Suite
-- Firebase Admin SDK in local setup/seed scripts only
-- `@zxing/browser`, Tesseract.js, Zod, GSAP, Lucide, date-fns, and html-to-image
-- A small manual service worker and web app manifest
-
-## Why this remains Firebase Spark compatible
-
-Veyro uses only Firebase Authentication, Firestore, Hosting, and local emulators. Next.js builds to static files with `output: "export"`; there is no server runtime. The repository has no Cloud Functions, Firebase App Hosting, Cloud Run, Cloud Storage, API routes, Server Actions, phone authentication, extensions, scheduled work, backups, PITR, or other billing-dependent Google Cloud services.
-
-Ticket images are processed in browser memory and are never uploaded. Reads are one-time queries, journey history is paginated, the dashboard queries only the signed-in user's documents, and there are no live listeners or analytics documents. Totals are calculated from journey documents instead of editable counters.
 
 ## Local setup
 
-Requirements: Node.js 22+, npm, Java 11+ for the Firestore emulator, and a Firebase project that remains on Spark.
+### Prerequisites
+
+- Node.js 22+ and npm
+- A Firebase project that remains on the Spark plan
+- Firebase CLI access through the installed `firebase-tools` package
+- A local Java runtime for Firebase Emulator Suite tests
+
+Install and start the application:
 
 ```bash
 npm install
@@ -143,17 +305,11 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. For local Firebase emulators, add `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true` to `.env.local`, then run `firebase emulators:start` in another terminal. The Take Photo action uses the phone's native system camera through a file input rather than `getUserMedia`, so Veyro does not run an embedded live-camera scanner.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Firebase project setup
+### Environment variables
 
-1. Create or select the existing Firebase project without upgrading from Spark.
-2. In Authentication → Sign-in method, enable Google only. Keep Email/Password and Phone disabled. Add the Hosting domain and local development domains to Authorized domains.
-3. Create a Cloud Firestore database. Deploy `firestore.rules` and `firestore.indexes.json` with `firebase deploy --only firestore`.
-4. Register a web app and copy its public configuration values into `.env.local`. These values identify the Firebase app; Firestore Security Rules provide data access control. Never commit `.env.local`.
-5. Copy `.firebaserc.example` to `.firebaserc` and replace the placeholder project ID.
-
-Required variables:
+The committed `.env.example` contains these application variables:
 
 ```dotenv
 NEXT_PUBLIC_FIREBASE_API_KEY=
@@ -164,52 +320,301 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_DEMO_MODE=false
 ```
 
-## Static build and Firebase Hosting
+These are Firebase web-app identifiers, not administrator credentials. Firestore Security Rules enforce data access. Never commit `.env.local`.
+
+The client also supports two optional settings that are not required in the production template:
+
+```dotenv
+NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true
+NEXT_PUBLIC_OCR_CONFIDENCE_THRESHOLD=0.72
+```
+
+Keep the OCR threshold at or above the Rules-enforced minimum unless the Rules and validation model are deliberately reviewed together.
+
+### Firebase project setup
+
+1. Create or select a Firebase project without upgrading it from Spark.
+2. Register a Web app and copy its public configuration into `.env.local`.
+3. In **Authentication → Sign-in method**, enable Google. Keep Email/Password and Phone disabled.
+4. Add the Hosting domain and required local development hosts to Authentication's authorised domains.
+5. Create Cloud Firestore.
+6. Copy `.firebaserc.example` to `.firebaserc` and select the intended project:
+
+   ```bash
+   cp .firebaserc.example .firebaserc
+   npx firebase login
+   npx firebase use --add
+   ```
+
+7. Deploy the Rules and composite indexes:
+
+   ```bash
+   npx firebase deploy --only firestore
+   ```
+
+No Firebase Storage bucket, Cloud Function, App Hosting backend or phone provider is required.
+
+### Local Emulator Suite
+
+In one terminal:
+
+```bash
+npx firebase emulators:start --only auth,firestore
+```
+
+In `.env.local`, set `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`, then restart:
+
+```bash
+npm run dev
+```
+
+The emulator configuration uses Authentication on port `9099`, Firestore on `8080` and the Emulator UI on `4000`.
+
+### Static build and Firebase Hosting
+
+```bash
+npm run build
+npx firebase deploy --only hosting
+```
+
+`npm run build` runs the static Next.js production build and generates `out/`. `firebase.json` serves that directory, applies immutable caching to hashed Next.js assets, disables long-lived caching for `sw.js` and contains no Functions rewrite or App Hosting configuration.
+
+## Demo mode
+
+Set the following in `.env.local` and restart the development server:
+
+```dotenv
+NEXT_PUBLIC_DEMO_MODE=true
+```
+
+The scanner then exposes existing development controls for:
+
+- Successful scan
+- Duplicate ticket
+- Unreadable route
+
+Demo mode also provides local demonstration data for selected screens. It is never enabled automatically, does not validate a Metro ticket and must remain `false` in production.
+
+## Administrator and seed setup
+
+<details>
+<summary>Administrator and Explore seed setup</summary>
+
+### Credential safety
+
+Administrative scripts run locally through the Firebase Admin SDK. Prefer a service-account file stored outside the repository:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/absolute/private/path/service-account.json"
+export FIREBASE_PROJECT_ID="your-project-id"
+```
+
+The scripts can alternatively use the currently authenticated Firebase CLI account after:
+
+```bash
+npx firebase login --reauth
+```
+
+Project selection comes from `FIREBASE_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT` or `.firebaserc`. Never expose administrator credentials through a `NEXT_PUBLIC_*` variable.
+
+The repository ignores:
+
+- `service-account*.json`
+- `firebase-admin-key*.json`
+- `*-firebase-adminsdk-*.json`
+
+Never commit, print or copy service-account contents into the application.
+
+### Grant or revoke an administrator
+
+There is no public Become Admin control or client-side email allowlist. Administration is determined by `admins/{uid}`:
+
+```bash
+npm run admin:grant -- --uid=<FIREBASE_UID>
+npm run admin:revoke -- --uid=<FIREBASE_UID>
+```
+
+Granting creates or updates an enabled protected administrator record. Revoking sets `enabled: false` without deleting journeys, submissions or interactions.
+
+### Validate and seed Veyro Curated Finds
+
+Validate the dataset without credentials:
+
+```bash
+npm run explore:seed:validate
+```
+
+Run the credentialed dry run; this performs no writes:
+
+```bash
+npm run explore:seed:dry -- --uid=<ENABLED_ADMIN_UID>
+```
+
+Apply only after reviewing the research report and dry-run output:
+
+```bash
+npm run explore:seed:apply -- --uid=<ENABLED_ADMIN_UID>
+```
+
+Apply mode requires an enabled administrator, uses batched writes and is idempotent and `seedVersion`-aware. It creates or updates:
+
+- `exploreFinds/{findId}` with public-safe Veyro Curated content
+- `exploreFindOwners/{findId}` with the private administrator ownership mapping
+- `exploreSourceRecords/{findId}` with administrator-only evidence
+
+To add or reverify a curated Find:
+
+1. Confirm the place, coordinates, access and station proximity using current reliable sources.
+2. Update both `data/explore-seed.ts` and `data/explore-seed-sources.ts`.
+3. Update `data/explore-seed-report.md` and the verification date.
+4. Increment the record's `seedVersion`.
+5. Run validation, dry run and then an intentional apply.
+
+### Optional showcase leaderboard seed
+
+For a controlled hackathon demonstration:
+
+```bash
+npm run seed:leaderboard
+```
+
+This command writes ten deterministic synthetic showcase profiles to the selected Firestore project. It uses the local Firebase CLI session, is not part of the browser bundle and is idempotent by deterministic IDs. Synthetic email addresses remain inside protected user documents and are not published in leaderboard entries.
+
+Review the selected Firebase project before running any seed command.
+
+</details>
+
+## Firestore privacy model
+
+<details>
+<summary>Collections, ownership and public-safe data</summary>
+
+### Ticket-backed journeys
+
+- `users/{uid}` stores the private account profile and optional private leaderboard ID.
+- `journeys/{journeyId}` stores an immutable, owner-scoped journey.
+- `ticketClaims/{ticketKey}` stores only `claimed` and `createdAt`; authenticated users may perform a known-document get, but listing is denied.
+- `privateTicketPayloads/{ticketKey}` stores the unchanged raw QR and ownership/route references; all normal-client reads, listings, updates and deletes are denied.
+
+The claim, private payload and journey must be created atomically.
+
+### Leaderboard
+
+- `leaderboardOwners/{leaderboardId}` privately maps a random public UUID to its owner and cannot be publicly listed.
+- `leaderboardEntries/{leaderboardId}` contains only visibility, public display name, optional enabled photo, total journeys, total distance, longest streak, version and timestamps.
+- The public entry never contains a Firebase UID, email, ticket data, journey ID, route or exact journey timestamp.
+- Leaving the leaderboard sets `visible: false` and does not delete private journeys.
+
+Top-five queries are cached one-time `limit(5)` reads. Secondary fields deterministically order the top five. Public positions use competition rank by primary metric, so a tie can display as `1, 2, 2, 4`.
+
+### Explore
+
+- `exploreFinds/{findId}` contains public-safe content, station, coordinates, author badge, moderation state and love count.
+- `exploreFindOwners/{findId}` is the protected ownership mapping.
+- `users/{uid}/exploreSubmissions/{findId}` is the contributor's private status and moderation message.
+- `users/{uid}/exploreInteractions/{findId}` stores private saves, visits, hides and reactions.
+- `exploreReports/{reportId}` stores private moderation reports.
+- `exploreSourceRecords/{findId}` stores administrator-only research evidence.
+- `exploreEligibility/{uid}` stores the owner's client-calculated eligibility snapshot.
+- `admins/{uid}` stores the protected administrator role and enabled state.
+
+Only Loved It affects the public `loveCount`, and only after an explicit visit. Not for Me has no public counter. A Firestore transaction keeps the private reaction and public count change together.
+
+</details>
+
+## Raw QR handling and duplicate prevention
+
+The product requirement stores the complete, unchanged raw QR value without hashing. Before submission, the browser trims only accidental outer whitespace and validates a UTF-8 length of 8–700 bytes.
+
+The browser then Base64URL-encodes those UTF-8 bytes to create `ticketKey`. **Base64URL is reversible encoding—not encryption or hashing.** The raw value itself is written only to `privateTicketPayloads/{ticketKey}`.
+
+The transaction reads only `ticketClaims/{ticketKey}`. If unused, it atomically creates the safe claim, private payload and journey. Reusing the same normal client-generated key returns:
+
+> This ticket has already been added to Veyro. A ticket can only be used once.
+
+The UI, exported journey image, Passport recap, URLs, logs, analytics, local storage, session storage, IndexedDB, Cache Storage and service worker never receive the raw QR. The ticket image is cleared from memory after processing and is never uploaded.
+
+### Spark-only duplicate limitation
+
+Because the deterministic key is generated by client code, a person who modifies that client can deliberately submit a different key. Firestore Rules cannot derive Base64URL from arbitrary UTF-8 text to prove the relationship. Duplicate prevention is reliable for normal application usage, but it is not completely tamper-proof.
+
+A production system would derive and validate the key in a trusted backend. Veyro deliberately does not add Cloud Functions or another paid backend as a workaround.
+
+## OCR and browser limitations
+
+Tesseract.js runs locally after image upscaling and grayscale/contrast preprocessing. Veyro supports:
+
+- Labelled paper tickets using `From:` and `To:`
+- Mobile routes using `→`, `->`, `>` or `TO`
+- Mobile layouts where the graphical arrow separates the two station labels
+
+Results below the default `0.72` confidence threshold require a rescan. From and To cannot be manually corrected. Glare, blur, low resolution, aggressive image compression, unusual fonts or uncached OCR assets can prevent recognition.
+
+QR detection, uncached OCR dependency loading, duplicate checks and journey submission require an internet connection. Veyro never queues ticket data for background synchronisation.
+
+## Testing
+
+Run the complete verification sequence:
 
 ```bash
 npm run typecheck
 npm run lint
 npm test
-npm run build
-firebase deploy --only hosting
-```
-
-`npm run build` creates the deployable `out/` directory. `firebase.json` points Hosting at that directory, caches hashed Next.js assets, avoids Functions rewrites, and disables long-lived caching for the service worker.
-
-## Emulator and Security Rules tests
-
-```bash
 npm run test:rules
+npm run build
 ```
 
-The suite covers unauthenticated access, cross-user journey reads, duplicate claims, claim listing, private payload reads, immutable journeys, and valid atomic claim + payload + journey creation. The default `npm test` suite validates station uniqueness, order, monotonic cumulative distance, segment sums, route distance, aliases, endpoint-only network coverage, local-calendar streaks, six-month grouping, records, invalid data handling, and deterministic insight ties.
+The suites cover:
 
-## One-scan flow and duplicate testing
+- Operational station order, uniqueness, aliases and route-distance integrity
+- Paper and mobile-ticket OCR parsing
+- Journey, Passport, streak and monthly calculations
+- Passport fragment validation
+- Leaderboard ordering, tie handling and safe public data
+- Local Explorer eligibility and deterministic Explore personalisation
+- Save, visit, reaction and love-count transitions
+- Curated seed integrity, sources, coordinates and station coverage
+- Firestore authentication, ownership, immutability, private collections, moderation and atomic writes
+- Static production export generation
 
-The browser validates the raw QR's trimmed UTF-8 byte length (8–700), preserves its internal contents unchanged, Base64URL-encodes the UTF-8 bytes as `ticketKey`, and starts a Firestore transaction. The transaction reads only `ticketClaims/{ticketKey}`. If absent, it creates the safe claim, write-only private payload, and journey atomically. Repeating the same scan produces:
+The repository does not define a separate Markdown-lint script.
 
-> This ticket has already been added to Veyro. A ticket can only be used once.
+## Kochi Metro data and attribution
 
-For development, set `NEXT_PUBLIC_DEMO_MODE=true` and restart the dev server. Scanner controls then simulate a successful scan, duplicate ticket, or unreadable route. Demo mode is never enabled automatically and must remain `false` in production.
+The station dataset contains **25 operational stations** in route order. Names, coordinates and route distances come from KMRL's official GTFS open-data feed, with the published `shape_dist_traveled` values normalised so Aluva is 0 km. The dataset is cross-checked against KMRL's station page and project report; source URLs and access dates are recorded in `data/kochi-metro-data-sources.ts`.
 
-## Raw QR privacy warning
+Contains data provided by Kochi Metro Rail Limited. Dataset use does not imply KMRL endorsement of Veyro.
 
-The product requirement explicitly stores the complete, unchanged QR value without hashing. It is stored only in `privateTicketPayloads/{ticketKey}`. Normal clients cannot read, list, update, or delete that collection. The safe `ticketClaims` document contains only `claimed` and `createdAt`. The UI, share image, URLs, logs, analytics, browser storage, service worker, and caches never include the raw QR. Ticket images are never persisted or uploaded.
+## Roadmap
 
-The Base64URL key is reversible encoding, not encryption or hashing. Firestore rules prevent ordinary duplicate use and require the claim, payload, and journey to be created atomically.
+All items below are future work.
 
-### Spark-only tamper-resistance limitation
+### Product
 
-Because Spark provides no trusted application backend here, the deterministic key is generated by client code. A determined person who modifies the client can deliberately submit a different key that does not correspond to the raw QR value. Firestore Security Rules cannot calculate Base64URL from arbitrary UTF-8 text to prove that correspondence. Therefore this Phase 1 design is reliable for normal application usage but is **not completely tamper-proof**.
+- Organisation and campus mobility challenges
+- Badges, campaign goals and station exploration events
+- Broader station coverage for researched Veyro Finds
+- Multi-city public-transport support
 
-Production-grade resistance to a maliciously modified client would require a trusted backend to derive and validate the key. That is deliberately outside Phase 1 and outside this strict Spark-only architecture; Cloud Functions are not added as a workaround.
+### Trust
 
-## OCR and browser limitations
+- Trusted backend ticket-key validation
+- Official transport-partner integration
+- Stronger abuse controls for public statistics and engagement
+- Expanded content-verification workflows
 
-OCR runs locally with Tesseract.js after upscaling and grayscale/contrast preprocessing. It supports labelled paper tickets (`From:` / `To:`), mobile routes using `→`, `->`, `>`, or `TO`, and mobile layouts where a graphical arrow causes the station names to be recognized on separate lines. Results below the configurable 0.72 confidence threshold require a rescan; stations cannot be manually corrected. Glare, blur, low-resolution cameras, stylized fonts, or uncached OCR language assets can prevent recognition. QR detection, OCR dependency loading when uncached, duplicate checks, and submission require a connection. Veyro never queues tickets for background sync and displays “You need an internet connection to add a journey.”
+### Experience
 
-## Kochi Metro data
+- Better verified accessibility metadata
+- Optional Find images under a future privacy-conscious storage model
+- Better offline discovery for already public, non-sensitive content
+- Multilingual interfaces
+- More accessible Explore filters
 
-Station order, coordinates, and route distances come from KMRL's official GTFS open-data feed, cross-checked against the official KMRL station page and DPR plus a secondary station list. GTFS `shape_dist_traveled` values are normalized so Aluva is 0 km. Sources and access dates are recorded in `data/kochi-metro-data-sources.ts`; validation is automated in `tests/stations.test.ts`.
+## Closing
 
-Contains data provided by Kochi Metro Rail Limited. This project is not presented as endorsed by KMRL.
+**Veyro demonstrates that public transport can be more than a transaction. It can become a habit, a community and a way to discover the city.**
+
+Built by [Shayen Thomas](https://github.com/shayen71421).
+
+Veyro is an independent traveller-created project, not an official Kochi Metro application. Metro station data is attributed to Kochi Metro Rail Limited; Veyro Curated and community recommendations remain independent and should be checked for current access, prices and opening hours.
