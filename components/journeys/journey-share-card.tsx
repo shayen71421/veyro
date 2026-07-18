@@ -1,0 +1,4 @@
+import { format } from "date-fns"; import { RouteLine } from "./route-line"; import type { Journey } from "@/types";
+import { BrandMark } from "@/components/ui/brand-mark";
+const asDate = (value: Journey["scannedAt"]) => value instanceof Date ? value : value.toDate();
+export function JourneyShareCard({ journey }: { journey: Journey }) { const date = asDate(journey.scannedAt); return <div className="share-card"><header><span className="brand"><BrandMark/>Veyro</span><span>Kochi Metro Journey</span></header><div className="share-route"><h2>{journey.fromStationName}</h2><span>to</span><h2>{journey.toStationName}</h2></div><RouteLine/><div className="share-stats"><div><strong>{journey.stationIntervals}</strong><span>station intervals</span></div><div><strong>{journey.distanceKm.toFixed(1)} km</strong><span>route distance</span></div></div><footer><span>{format(date, "d MMMM yyyy")}</span><span>{format(date, "h:mm a")}</span></footer></div>; }

@@ -1,35 +1,6 @@
 "use client";
-
-import { useRouter } from "next/navigation";
-import { CheckCircle2, RotateCcw } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
-import { RouteLine } from "@/components/journeys/route-line";
-import { useScannerStore } from "@/features/scanner/scanner-context";
-
-export default function VerifyPage() {
-  const store = useScannerStore();
-  const router = useRouter();
-  const route = store.route;
-
-  if (!route) {
-    return <AppShell><section className="page center">
-      <h1>No verified ticket</h1>
-      <p className="muted mt-2">Scan a ticket to verify its route.</p>
-      <button className="primary-button mt-6" onClick={() => router.replace("/scan/")}>Open scanner</button>
-    </section></AppShell>;
-  }
-
-  return <AppShell><section className="page verification">
-    <div className="verified-icon"><CheckCircle2/></div>
-    <span className="eyebrow">Ticket verified</span>
-    <h1>{route.from.name} <span>→</span> {route.to.name}</h1>
-    <RouteLine/>
-    <p className="confidence">{route.confidence >= .88 ? "Route text is very clear" : "Route text is clear enough to verify"}</p>
-    <div className="sticky-actions">
-      <button className="secondary-button" onClick={() => {
-        store.clearScan();
-        router.replace("/scan/");
-      }}><RotateCcw size={18}/>Scan Again</button>
-    </div>
-  </section></AppShell>;
-}
+import { useState } from "react"; import { useRouter } from "next/navigation"; import { CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react"; import { AppShell } from "@/components/layout/app-shell"; import { RouteLine } from "@/components/journeys/route-line"; import { ErrorMessage } from "@/components/ui/error-message"; import { ProcessingSteps } from "@/components/scanner/processing-steps"; import { useScannerStore } from "@/features/scanner/scanner-context"; import { useAuth } from "@/features/auth/auth-context"; import { addJourney, JourneyError } from "@/features/journeys/journey-service"; import { calculateRouteDistance, calculateStationIntervals } from "@/lib/stations/route"; import type { Journey } from "@/types";
+const duplicateMessage = "This ticket has already been added to Veyro. A ticket can only be used once.";
+export default function VerifyPage() { const store = useScannerStore(); const { user, demo } = useAuth(); const router = useRouter(); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const route = store.route; if (!route) return <AppShell><section className="page center"><h1>No verified ticket</h1><p className="muted mt-2">Scan a ticket to verify its route.</p><button className="primary-button mt-6" onClick={() => router.replace("/scan/")}>Open scanner</button></section></AppShell>;
+  const submit = async () => { const rawQrValue = store.getRawQr(); if (!rawQrValue || !user || busy) return; setBusy(true); setError(""); store.setProcessingStep("duplicate"); try { let journey: Journey; if (demo) { if (rawQrValue === "VEYRO-DEMO-DUPLICATE-001") throw new JourneyError("TICKET_ALREADY_USED"); store.setProcessingStep("saving"); journey = { id: `demo-${Date.now()}`, ownerUid: user.uid, fromStationId: route.from.id, fromStationName: route.from.name, toStationId: route.to.id, toStationName: route.to.name, stationIntervals: calculateStationIntervals(route.from, route.to), distanceKm: calculateRouteDistance(route.from, route.to), scannedAt: new Date(), createdAt: new Date(), ocrConfidence: route.confidence, ticketReference: "demo-reference-hidden" }; } else { store.setProcessingStep("saving"); journey = await addJourney({ rawQrValue, fromStationId: route.from.id, toStationId: route.to.id, ocrConfidence: route.confidence, ownerUid: user.uid }); } store.clearSensitive(); store.setResult(journey); router.replace("/journey/"); } catch (caught) { store.clearSensitive(); store.setProcessingStep(null); setBusy(false); setError(caught instanceof JourneyError && caught.code === "TICKET_ALREADY_USED" ? duplicateMessage : navigator.onLine ? "We could not save this journey safely. Please scan the ticket again." : "You need an internet connection to add a journey."); } };
+  return <AppShell><section className="page verification"><div className="verified-icon"><CheckCircle2/></div><span className="eyebrow">Ticket verified</span><h1>{route.from.name} <span>→</span> {route.to.name}</h1><RouteLine/><div className="verification-stats"><div><strong>{calculateStationIntervals(route.from, route.to)}</strong><span>station intervals</span></div><div><strong>{calculateRouteDistance(route.from, route.to).toFixed(1)} km</strong><span>route distance</span></div></div><p className="confidence">{route.confidence >= .88 ? "Route text is very clear" : "Route text is clear enough to verify"}</p>{error && <ErrorMessage message={error}/>} {busy && store.processingStep ? <ProcessingSteps current={store.processingStep}/> : <div className="sticky-actions"><button className="primary-button" onClick={() => void submit()} disabled={busy}>{busy ? <LoaderCircle className="animate-spin"/> : "Add Journey"}</button><button className="secondary-button" onClick={() => { store.clearScan(); router.replace("/scan/"); }}><RotateCcw size={18}/>Scan Again</button></div>}</section></AppShell>; }

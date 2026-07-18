@@ -1,0 +1,3 @@
+import Link from "next/link"; import { format } from "date-fns"; import { ArrowRight, MapPin } from "lucide-react"; import type { Journey } from "@/types";
+const dateOf = (value: Journey["scannedAt"]) => value instanceof Date ? value : value.toDate();
+export function JourneyCard({ journey }: { journey: Journey }) { return <Link className="journey-card" href={`/journey/?id=${journey.id}`} data-animate><div><span className="eyebrow">{format(dateOf(journey.scannedAt), "d MMM yyyy")}</span><h3>{journey.fromStationName} <ArrowRight size={15}/> {journey.toStationName}</h3></div><div className="journey-meta"><span><MapPin size={14}/>{journey.distanceKm.toFixed(1)} km</span><span>{journey.stationIntervals} intervals</span></div></Link>; }
