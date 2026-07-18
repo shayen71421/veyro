@@ -1,0 +1,1 @@
+import { AppShell } from "@/components/layout/app-shell"; import { TicketScanner } from "@/components/scanner/ticket-scanner"; export const metadata = { title: "Scan ticket" }; export default function ScanPage() { return <AppShell hideNav><TicketScanner/></AppShell>; }
